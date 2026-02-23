@@ -1,0 +1,67 @@
+name: Deploy SBT Infrastructure
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "infrastructure/**"
+      - "codebuild-codedeploy/**"
+      - "k8s-artifacts/**"
+      - ".github/workflows/sbt-cdk-deploy.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infrastructure
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Install infrastructure dependencies
+        run: npm install
+
+      - name: CDK Synth
+        env:
+          SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
+          NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+          CODESTAR_CONNECTION_ARN: ${{ secrets.CODESTAR_CONNECTION_ARN }}
+        run: >
+          npm run synth -- -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL"
+          -c githubOwner="rahultiple31"
+          -c githubRepo="cdk-web"
+          -c githubBranch="main"
+          -c codestarConnectionArn="$CODESTAR_CONNECTION_ARN"
+          -c newRelicLicenseKey="$NEW_RELIC_LICENSE_KEY"
+
+      - name: CDK Deploy
+        env:
+          SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
+          NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+          CODESTAR_CONNECTION_ARN: ${{ secrets.CODESTAR_CONNECTION_ARN }}
+        run: >
+          npm run deploy -- -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL"
+          -c githubOwner="rahultiple31"
+          -c githubRepo="cdk-web"
+          -c githubBranch="main"
+          -c codestarConnectionArn="$CODESTAR_CONNECTION_ARN"
+          -c newRelicLicenseKey="$NEW_RELIC_LICENSE_KEY"

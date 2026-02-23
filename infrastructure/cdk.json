@@ -1,0 +1,19 @@
+{
+  "app": "npx ts-node --prefer-ts-exts -P tsconfig.json bin/sbt-toolkit.ts",
+  "watch": {
+    "include": [
+      "bin/**/*.ts",
+      "lib/**/*.ts"
+    ],
+    "exclude": [
+      "README.md",
+      "cdk*.json",
+      "package*.json",
+      "node_modules",
+      "cdk.out"
+    ]
+  },
+  "context": {
+    "@aws-cdk/core:newStyleStackSynthesis": true
+  }
+}

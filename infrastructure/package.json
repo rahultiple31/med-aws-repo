@@ -1,0 +1,27 @@
+{
+  "name": "sbt-builder-toolkit-infra",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Enterprise SaaS Builder Toolkit control plane and application plane on AWS CDK.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -w -p tsconfig.json",
+    "cdk": "cdk",
+    "synth": "cdk synth --all",
+    "deploy": "cdk deploy --all --require-approval never",
+    "diff": "cdk diff --all",
+    "destroy": "cdk destroy --all"
+  },
+  "dependencies": {
+    "@aws-cdk/lambda-layer-kubectl-v29": "^2.0.0",
+    "@cdklabs/sbt-aws": "latest",
+    "aws-cdk-lib": "^2.0.0",
+    "constructs": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "aws-cdk": "^2.0.0",
+    "ts-node": "^10.0.0",
+    "typescript": "^5.0.0"
+  }
+}

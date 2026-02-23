@@ -1,0 +1,46 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+    commands:
+      - echo "Starting build pipeline"
+      - export IMAGE_TAG="$(echo ${CODEBUILD_RESOLVED_SOURCE_VERSION:-latest} | cut -c 1-7)"
+      - if [ -z "$IMAGE_TAG" ]; then IMAGE_TAG=latest; fi
+  pre_build:
+    commands:
+      - echo "Cloning GitHub repository"
+      - rm -rf app-source
+      - git clone --depth 1 --branch "$GITHUB_BRANCH" "$GITHUB_REPOSITORY_URL" app-source
+      - cd app-source
+      - echo "Installing dependencies and running build checks"
+      - npm ci
+      - npm run build --if-present
+      - npm run test --if-present
+      - export ECR_REGISTRY="$(echo "$ECR_REPOSITORY_URI" | cut -d/ -f1)"
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+  build:
+    commands:
+      - echo "Building docker image"
+      - docker build -t "$ECR_REPOSITORY_URI:$IMAGE_TAG" .
+  post_build:
+    commands:
+      - echo "Pushing docker image to ECR"
+      - docker push "$ECR_REPOSITORY_URI:$IMAGE_TAG"
+      - export IMAGE_URI="$ECR_REPOSITORY_URI:$IMAGE_TAG"
+      - echo "Preparing deploy artifact with latest image"
+      - mkdir -p ../build-output/k8s-artifacts
+      - sed "s|REPLACE_WITH_ECR_IMAGE_URI:latest|$IMAGE_URI|g" k8s-artifacts/deployment.yaml > ../build-output/k8s-artifacts/deployment.yaml
+      - cp k8s-artifacts/namespace.yaml ../build-output/k8s-artifacts/namespace.yaml
+      - cp k8s-artifacts/service.yaml ../build-output/k8s-artifacts/service.yaml
+      - cp k8s-artifacts/hpa.yaml ../build-output/k8s-artifacts/hpa.yaml
+      - cp k8s-artifacts/ingress.yaml ../build-output/k8s-artifacts/ingress.yaml
+      - cp codebuild-codedeploy/deployspec.yml ../build-output/deployspec.yml
+      - printf '{"imageUri":"%s"}' "$IMAGE_URI" > ../build-output/imageDetail.json
+
+artifacts:
+  files:
+    - "**/*"
+  base-directory: build-output
+  discard-paths: no

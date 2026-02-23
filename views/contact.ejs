@@ -1,0 +1,59 @@
+<%- include("partials/head") %>
+<%- include("partials/header") %>
+
+<main class="page-main">
+  <section class="page-hero">
+    <div class="container">
+      <p class="eyebrow">Contact</p>
+      <h1>Talk To Our Admissions Team</h1>
+      <p>Fill this form and we will call you with a personalized learning plan.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container contact-layout">
+      <form id="inquiryForm" class="contact-form">
+        <label>
+          Full Name
+          <input type="text" name="name" required>
+        </label>
+        <label>
+          Email
+          <input type="email" name="email" required>
+        </label>
+        <label>
+          Phone
+          <input type="tel" name="phone" placeholder="+1 555 000 0000">
+        </label>
+        <label>
+          Course
+          <select name="course" required>
+            <option value="">Select Course</option>
+            <option value="Full Stack Development">Full Stack Development</option>
+            <option value="Data Science Foundations">Data Science Foundations</option>
+            <option value="UI/UX Design">UI/UX Design</option>
+            <option value="Digital Marketing">Digital Marketing</option>
+          </select>
+        </label>
+        <label>
+          Message
+          <textarea name="message" rows="5" placeholder="Tell us about your goals"></textarea>
+        </label>
+        <button class="btn btn-primary" type="submit">Submit Inquiry</button>
+        <p id="formStatus" class="form-status" aria-live="polite"></p>
+      </form>
+
+      <aside class="contact-info">
+        <h2>Academy Office</h2>
+        <p>4th Floor, Learning Hub, New York, NY</p>
+        <p><strong>Call:</strong> +1 (555) 210-9090</p>
+        <p><strong>Email:</strong> hello@netcircleacademy.com</p>
+        <hr>
+        <h3>Working Hours</h3>
+        <p>Mon - Sat: 9:00 AM to 8:00 PM</p>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<%- include("partials/footer") %>

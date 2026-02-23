@@ -1,0 +1,25 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo "Installing kubectl for EKS deployment"
+      - curl -sSL -o kubectl https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl
+      - install -m 0755 kubectl /usr/local/bin/kubectl
+      - kubectl version --client
+  pre_build:
+    commands:
+      - echo "Configuring kubeconfig for EKS cluster"
+      - aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_DEFAULT_REGION"
+  build:
+    commands:
+      - echo "Applying Kubernetes manifests"
+      - kubectl apply -f k8s-artifacts/namespace.yaml
+      - kubectl apply -f k8s-artifacts/service.yaml
+      - kubectl apply -f k8s-artifacts/deployment.yaml
+      - kubectl apply -f k8s-artifacts/hpa.yaml
+      - kubectl apply -f k8s-artifacts/ingress.yaml
+  post_build:
+    commands:
+      - echo "Waiting for deployment rollout"
+      - kubectl rollout status deployment/cdk-web -n sbt-app --timeout=300s
