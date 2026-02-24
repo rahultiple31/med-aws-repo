@@ -113,6 +113,16 @@ export class SbtControlPlaneStack extends cdk.Stack {
 
     const tenantTableThrottleAlarm = new cloudwatch.Alarm(this, 'TenantTableThrottleAlarm', {
       metric: this.tenantDirectoryTable.metricThrottledRequestsForOperations({
+        operations: [
+          dynamodb.Operation.GET_ITEM,
+          dynamodb.Operation.QUERY,
+          dynamodb.Operation.SCAN,
+          dynamodb.Operation.BATCH_GET_ITEM,
+          dynamodb.Operation.PUT_ITEM,
+          dynamodb.Operation.UPDATE_ITEM,
+          dynamodb.Operation.DELETE_ITEM,
+          dynamodb.Operation.BATCH_WRITE_ITEM,
+        ],
         period: cdk.Duration.minutes(5),
         statistic: 'sum',
       }),
