@@ -21,6 +21,7 @@ if (!systemAdminEmail) {
 const githubOwner = app.node.tryGetContext('githubOwner') ?? 'rahultiple31';
 const githubRepo = app.node.tryGetContext('githubRepo') ?? 'cdk-web';
 const githubBranch = app.node.tryGetContext('githubBranch') ?? 'main';
+const eksClusterName = app.node.tryGetContext('eksClusterName') ?? 'sbt-application-eks';
 const codestarConnectionArn =
   app.node.tryGetContext('codestarConnectionArn') ??
   process.env.CODESTAR_CONNECTION_ARN ??
@@ -33,23 +34,22 @@ const controlPlaneStack = new SbtControlPlaneStack(app, 'SbtControlPlaneStack', 
     app.node.tryGetContext('controlPlaneCallbackUrl') ?? 'https://admin.example.com/callback',
 });
 
+const cicdPipelineStack = new SbtCiCdPipelineStack(app, 'SbtCiCdPipelineStack', {
+  env,
+  eksClusterName,
+  githubOwner,
+  githubRepo,
+  githubBranch,
+  codestarConnectionArn,
+});
+
 const applicationPlaneStack = new SbtApplicationPlaneStack(app, 'SbtApplicationPlaneStack', {
   env,
   vpc: controlPlaneStack.vpc,
   appSecurityGroup: controlPlaneStack.appSecurityGroup,
   dbSecurityGroup: controlPlaneStack.dbSecurityGroup,
   cacheSecurityGroup: controlPlaneStack.cacheSecurityGroup,
-  eksClusterName: app.node.tryGetContext('eksClusterName') ?? 'sbt-application-eks',
+  eksDeployRole: cicdPipelineStack.eksDeploymentRole,
+  eksClusterName,
 });
 applicationPlaneStack.addDependency(controlPlaneStack);
-
-const cicdPipelineStack = new SbtCiCdPipelineStack(app, 'SbtCiCdPipelineStack', {
-  env,
-  eksClusterName: applicationPlaneStack.cluster.clusterName,
-  eksDeployRole: applicationPlaneStack.eksDeploymentRole,
-  githubOwner,
-  githubRepo,
-  githubBranch,
-  codestarConnectionArn,
-});
-cicdPipelineStack.addDependency(applicationPlaneStack);

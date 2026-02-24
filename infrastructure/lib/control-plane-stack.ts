@@ -104,13 +104,15 @@ export class SbtControlPlaneStack extends cdk.Stack {
         type: dynamodb.AttributeType.STRING,
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
     const tenantTableThrottleAlarm = new cloudwatch.Alarm(this, 'TenantTableThrottleAlarm', {
-      metric: this.tenantDirectoryTable.metricThrottledRequests({
+      metric: this.tenantDirectoryTable.metricThrottledRequestsForOperations({
         period: cdk.Duration.minutes(5),
         statistic: 'sum',
       }),

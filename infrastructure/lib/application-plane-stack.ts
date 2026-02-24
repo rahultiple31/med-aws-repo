@@ -15,6 +15,7 @@ export interface SbtApplicationPlaneStackProps extends cdk.StackProps {
   readonly appSecurityGroup: ec2.ISecurityGroup;
   readonly dbSecurityGroup: ec2.ISecurityGroup;
   readonly cacheSecurityGroup: ec2.ISecurityGroup;
+  readonly eksDeployRole: iam.IRole;
   readonly eksClusterName?: string;
 }
 
@@ -22,7 +23,6 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
   public readonly cluster: eks.Cluster;
   public readonly applicationDataTable: dynamodb.Table;
   public readonly mysqlDatabase: rds.DatabaseInstance;
-  public readonly eksDeploymentRole: iam.Role;
 
   constructor(scope: Construct, id: string, props: SbtApplicationPlaneStackProps) {
     super(scope, id, props);
@@ -67,17 +67,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       capacityType: eks.CapacityType.ON_DEMAND,
     });
 
-    this.eksDeploymentRole = new iam.Role(this, 'EksDeploymentCodeBuildRole', {
-      assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
-      description: 'Role used by CodeBuild deploy stage to apply manifests to EKS.',
-    });
-    this.eksDeploymentRole.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ['eks:DescribeCluster'],
-        resources: [this.cluster.clusterArn],
-      })
-    );
-    this.cluster.awsAuth.addMastersRole(this.eksDeploymentRole);
+    this.cluster.awsAuth.addMastersRole(props.eksDeployRole);
 
     this.cluster.addManifest('SbtAppNamespace', {
       apiVersion: 'v1',
@@ -147,7 +137,9 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
         type: dynamodb.AttributeType.STRING,
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
@@ -217,9 +209,6 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, 'ApplicationPlaneLogGroupName', {
       value: applicationLogGroup.logGroupName,
-    });
-    new cdk.CfnOutput(this, 'EksDeploymentRoleArn', {
-      value: this.eksDeploymentRole.roleArn,
     });
   }
 }
