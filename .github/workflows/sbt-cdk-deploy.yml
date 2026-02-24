@@ -54,6 +54,7 @@ jobs:
       - name: Ensure CDK bootstrap exists
         env:
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
         run: |
           set -euo pipefail
           account_id="$(aws sts get-caller-identity --query Account --output text)"
@@ -63,7 +64,8 @@ jobs:
             echo "CDK bootstrap already exists in ${account_id}/${AWS_REGION}"
           else
             echo "CDK bootstrap not found in ${account_id}/${AWS_REGION}. Bootstrapping now..."
-            npm run cdk -- bootstrap "aws://${account_id}/${AWS_REGION}" --require-approval never
+            npm run cdk -- bootstrap "aws://${account_id}/${AWS_REGION}" --require-approval never \
+              -c systemAdminEmail="${SBT_SYSTEM_ADMIN_EMAIL:-bootstrap@example.com}"
           fi
 
       - name: Validate callback URL secret
