@@ -1,0 +1,105 @@
+name: Destroy SBT Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      stack:
+        description: "Choose which stack to destroy"
+        required: true
+        default: all-stacks
+        type: choice
+        options:
+          - all-stacks
+          - control-plane-stack.ts
+          - application-plane-stack.ts
+          - pipeline-plane-stack.ts
+      confirm:
+        description: "Type DESTROY to confirm"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infrastructure
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Install infrastructure dependencies
+        run: npm install
+
+      - name: Confirm destroy request
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "DESTROY" ]; then
+            echo "Confirmation failed. Enter DESTROY in the 'confirm' input."
+            exit 1
+          fi
+
+      - name: CDK Destroy
+        env:
+          STACK_CHOICE: ${{ github.event.inputs.stack }}
+          SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
+          CODESTAR_CONNECTION_ARN: ${{ secrets.CODESTAR_CONNECTION_ARN }}
+        run: |
+          set -euo pipefail
+
+          destroy_stack() {
+            local stack_name="$1"
+            echo "Destroying ${stack_name}"
+            npm run cdk -- destroy "${stack_name}" --force \
+              -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL" \
+              -c githubOwner="rahultiple31" \
+              -c githubRepo="cdk-web" \
+              -c githubBranch="main" \
+              -c codestarConnectionArn="$CODESTAR_CONNECTION_ARN"
+          }
+
+          case "$STACK_CHOICE" in
+            control-plane-stack.ts)
+              destroy_stack "SbtControlPlaneStack"
+              ;;
+            application-plane-stack.ts)
+              destroy_stack "SbtApplicationPlaneStack"
+              ;;
+            pipeline-plane-stack.ts)
+              destroy_stack "SbtCiCdPipelineStack"
+              ;;
+            all-stacks)
+              destroy_stack "SbtCiCdPipelineStack"
+              destroy_stack "SbtApplicationPlaneStack"
+              destroy_stack "SbtControlPlaneStack"
+              ;;
+            *)
+              echo "Unsupported stack choice: $STACK_CHOICE"
+              exit 1
+              ;;
+          esac
