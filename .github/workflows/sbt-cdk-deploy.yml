@@ -21,6 +21,8 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      CDK_BOOTSTRAP_QUALIFIER: gha659fds
     defaults:
       run:
         working-directory: infrastructure
@@ -58,13 +60,15 @@ jobs:
         run: |
           set -euo pipefail
           account_id="$(aws sts get-caller-identity --query Account --output text)"
-          bootstrap_version_param="/cdk-bootstrap/hnb659fds/version"
+          bootstrap_version_param="/cdk-bootstrap/${CDK_BOOTSTRAP_QUALIFIER}/version"
 
           if aws ssm get-parameter --name "$bootstrap_version_param" --region "$AWS_REGION" >/dev/null 2>&1; then
-            echo "CDK bootstrap already exists in ${account_id}/${AWS_REGION}"
+            echo "CDK bootstrap already exists in ${account_id}/${AWS_REGION} with qualifier ${CDK_BOOTSTRAP_QUALIFIER}"
           else
-            echo "CDK bootstrap not found in ${account_id}/${AWS_REGION}. Bootstrapping now..."
+            echo "CDK bootstrap not found in ${account_id}/${AWS_REGION} with qualifier ${CDK_BOOTSTRAP_QUALIFIER}. Bootstrapping now..."
             npm run cdk -- bootstrap "aws://${account_id}/${AWS_REGION}" --require-approval never \
+              --qualifier "${CDK_BOOTSTRAP_QUALIFIER}" \
+              -c @aws-cdk/core:bootstrapQualifier="${CDK_BOOTSTRAP_QUALIFIER}" \
               -c systemAdminEmail="${SBT_SYSTEM_ADMIN_EMAIL:-bootstrap@example.com}"
           fi
 
@@ -123,6 +127,7 @@ jobs:
           CONTROL_PLANE_CALLBACK_URL: ${{ secrets.CONTROL_PLANE_CALLBACK_URL }}
         run: >
           npm run cdk -- synth ${{ steps.resolve_stack.outputs.stack_name }}
+          -c @aws-cdk/core:bootstrapQualifier="$CDK_BOOTSTRAP_QUALIFIER"
           -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL"
           -c controlPlaneCallbackUrl="$CONTROL_PLANE_CALLBACK_URL"
           -c githubOwner="rahultiple31"
@@ -138,6 +143,7 @@ jobs:
         run: >
           npm run cdk -- deploy ${{ steps.resolve_stack.outputs.stack_name }}
           --require-approval never
+          -c @aws-cdk/core:bootstrapQualifier="$CDK_BOOTSTRAP_QUALIFIER"
           -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL"
           -c controlPlaneCallbackUrl="$CONTROL_PLANE_CALLBACK_URL"
           -c githubOwner="rahultiple31"

@@ -25,6 +25,8 @@ permissions:
 jobs:
   destroy:
     runs-on: ubuntu-latest
+    env:
+      CDK_BOOTSTRAP_QUALIFIER: gha659fds
     defaults:
       run:
         working-directory: infrastructure
@@ -95,6 +97,7 @@ jobs:
             local stack_name="$1"
             echo "Destroying ${stack_name}"
             npm run cdk -- destroy "${stack_name}" --force \
+              -c @aws-cdk/core:bootstrapQualifier="$CDK_BOOTSTRAP_QUALIFIER" \
               -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL" \
               -c controlPlaneCallbackUrl="$CONTROL_PLANE_CALLBACK_URL" \
               -c githubOwner="rahultiple31" \
