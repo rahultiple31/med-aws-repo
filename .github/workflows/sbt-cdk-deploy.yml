@@ -2,6 +2,17 @@ name: Deploy SBT Infrastructure
 
 on:
   workflow_dispatch:
+    inputs:
+      stack:
+        description: "Choose which stack to deploy"
+        required: true
+        default: all-stacks
+        type: choice
+        options:
+          - all-stacks
+          - control-plane-stack.ts
+          - application-plane-stack.ts
+          - pipeline-plane-stack.ts
   push:
     branches:
       - main
@@ -40,13 +51,44 @@ jobs:
       - name: Install infrastructure dependencies
         run: npm install
 
+      - name: Resolve selected stack
+        id: resolve_stack
+        env:
+          STACK_CHOICE: ${{ github.event.inputs.stack }}
+        run: |
+          stack_choice="${STACK_CHOICE:-all-stacks}"
+          resolved_stack="--all"
+
+          case "$stack_choice" in
+            control-plane-stack.ts)
+              resolved_stack="SbtControlPlaneStack"
+              ;;
+            application-plane-stack.ts)
+              resolved_stack="SbtApplicationPlaneStack"
+              ;;
+            pipeline-plane-stack.ts)
+              resolved_stack="SbtCiCdPipelineStack"
+              ;;
+            all-stacks)
+              resolved_stack="--all"
+              ;;
+            *)
+              echo "Unsupported stack choice: $stack_choice"
+              exit 1
+              ;;
+          esac
+
+          echo "Resolved stack target: $resolved_stack"
+          echo "stack_name=$resolved_stack" >> "$GITHUB_OUTPUT"
+
       - name: CDK Synth
         env:
           SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
           NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
           CODESTAR_CONNECTION_ARN: ${{ secrets.CODESTAR_CONNECTION_ARN }}
         run: >
-          npm run synth -- -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL"
+          npm run cdk -- synth ${{ steps.resolve_stack.outputs.stack_name }}
+          -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL"
           -c githubOwner="rahultiple31"
           -c githubRepo="cdk-web"
           -c githubBranch="main"
@@ -59,7 +101,9 @@ jobs:
           NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
           CODESTAR_CONNECTION_ARN: ${{ secrets.CODESTAR_CONNECTION_ARN }}
         run: >
-          npm run deploy -- -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL"
+          npm run cdk -- deploy ${{ steps.resolve_stack.outputs.stack_name }}
+          --require-approval never
+          -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL"
           -c githubOwner="rahultiple31"
           -c githubRepo="cdk-web"
           -c githubBranch="main"
