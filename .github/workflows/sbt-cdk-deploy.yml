@@ -51,6 +51,21 @@ jobs:
       - name: Install infrastructure dependencies
         run: npm install
 
+      - name: Ensure CDK bootstrap exists
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+        run: |
+          set -euo pipefail
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          bootstrap_version_param="/cdk-bootstrap/hnb659fds/version"
+
+          if aws ssm get-parameter --name "$bootstrap_version_param" --region "$AWS_REGION" >/dev/null 2>&1; then
+            echo "CDK bootstrap already exists in ${account_id}/${AWS_REGION}"
+          else
+            echo "CDK bootstrap not found in ${account_id}/${AWS_REGION}. Bootstrapping now..."
+            npm run cdk -- bootstrap "aws://${account_id}/${AWS_REGION}" --require-approval never
+          fi
+
       - name: Validate callback URL secret
         env:
           CONTROL_PLANE_CALLBACK_URL: ${{ secrets.CONTROL_PLANE_CALLBACK_URL }}
