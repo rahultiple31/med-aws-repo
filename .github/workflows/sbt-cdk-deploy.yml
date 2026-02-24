@@ -13,14 +13,6 @@ on:
           - control-plane-stack.ts
           - application-plane-stack.ts
           - pipeline-plane-stack.ts
-  push:
-    branches:
-      - main
-    paths:
-      - "infrastructure/**"
-      - "codebuild-codedeploy/**"
-      - "k8s-artifacts/**"
-      - ".github/workflows/sbt-cdk-deploy.yml"
 
 permissions:
   id-token: write
@@ -41,6 +33,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
