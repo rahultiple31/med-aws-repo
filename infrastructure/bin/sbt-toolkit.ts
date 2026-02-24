@@ -34,22 +34,23 @@ const controlPlaneStack = new SbtControlPlaneStack(app, 'SbtControlPlaneStack', 
     app.node.tryGetContext('controlPlaneCallbackUrl') ?? 'https://admin.example.com/callback',
 });
 
-const cicdPipelineStack = new SbtCiCdPipelineStack(app, 'SbtCiCdPipelineStack', {
-  env,
-  eksClusterName,
-  githubOwner,
-  githubRepo,
-  githubBranch,
-  codestarConnectionArn,
-});
-
 const applicationPlaneStack = new SbtApplicationPlaneStack(app, 'SbtApplicationPlaneStack', {
   env,
   vpc: controlPlaneStack.vpc,
   appSecurityGroup: controlPlaneStack.appSecurityGroup,
   dbSecurityGroup: controlPlaneStack.dbSecurityGroup,
   cacheSecurityGroup: controlPlaneStack.cacheSecurityGroup,
-  eksDeployRole: cicdPipelineStack.eksDeploymentRole,
   eksClusterName,
 });
 applicationPlaneStack.addDependency(controlPlaneStack);
+
+const cicdPipelineStack = new SbtCiCdPipelineStack(app, 'SbtCiCdPipelineStack', {
+  env,
+  eksClusterName: applicationPlaneStack.cluster.clusterName,
+  eksDeployRoleArn: applicationPlaneStack.eksDeploymentRole.roleArn,
+  githubOwner,
+  githubRepo,
+  githubBranch,
+  codestarConnectionArn,
+});
+cicdPipelineStack.addDependency(applicationPlaneStack);

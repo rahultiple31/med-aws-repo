@@ -9,6 +9,7 @@ import { Construct } from 'constructs';
 
 export interface SbtCiCdPipelineStackProps extends cdk.StackProps {
   readonly eksClusterName: string;
+  readonly eksDeployRoleArn: string;
   readonly githubOwner: string;
   readonly githubRepo: string;
   readonly githubBranch: string;
@@ -16,8 +17,6 @@ export interface SbtCiCdPipelineStackProps extends cdk.StackProps {
 }
 
 export class SbtCiCdPipelineStack extends cdk.Stack {
-  public readonly eksDeploymentRole: iam.Role;
-
   constructor(scope: Construct, id: string, props: SbtCiCdPipelineStackProps) {
     super(scope, id, props);
 
@@ -57,25 +56,14 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
       })
     );
 
-    this.eksDeploymentRole = new iam.Role(this, 'EksDeploymentCodeBuildRole', {
-      assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
-      description: 'Role used by CodeBuild deploy stage to apply manifests to EKS.',
-    });
-    this.eksDeploymentRole.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ['eks:DescribeCluster'],
-        resources: [
-          cdk.Stack.of(this).formatArn({
-            service: 'eks',
-            resource: 'cluster',
-            resourceName: props.eksClusterName,
-          }),
-        ],
-      })
+    const eksDeploymentRole = iam.Role.fromRoleArn(
+      this,
+      'ImportedEksDeploymentCodeBuildRole',
+      props.eksDeployRoleArn
     );
 
     const deployProject = new codebuild.PipelineProject(this, 'SbtEksDeployProject', {
-      role: this.eksDeploymentRole,
+      role: eksDeploymentRole,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
       },
@@ -148,9 +136,6 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, 'CodeDeployProjectName', {
       value: deployProject.projectName,
-    });
-    new cdk.CfnOutput(this, 'EksDeploymentRoleArn', {
-      value: this.eksDeploymentRole.roleArn,
     });
     new cdk.CfnOutput(this, 'EcrRepositoryUri', {
       value: containerRepository.repositoryUri,
