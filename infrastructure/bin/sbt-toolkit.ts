@@ -25,10 +25,6 @@ const codestarConnectionArn =
   app.node.tryGetContext('codestarConnectionArn') ??
   process.env.CODESTAR_CONNECTION_ARN ??
   'arn:aws:codestar-connections:us-east-1:111111111111:connection/replace-me';
-const newRelicLicenseKey =
-  app.node.tryGetContext('newRelicLicenseKey') ??
-  process.env.NEW_RELIC_LICENSE_KEY ??
-  'REPLACE_WITH_NEW_RELIC_LICENSE_KEY';
 
 const controlPlaneStack = new SbtControlPlaneStack(app, 'SbtControlPlaneStack', {
   env,
@@ -43,7 +39,6 @@ const applicationPlaneStack = new SbtApplicationPlaneStack(app, 'SbtApplicationP
   appSecurityGroup: controlPlaneStack.appSecurityGroup,
   dbSecurityGroup: controlPlaneStack.dbSecurityGroup,
   cacheSecurityGroup: controlPlaneStack.cacheSecurityGroup,
-  newRelicLicenseKey,
   eksClusterName: app.node.tryGetContext('eksClusterName') ?? 'sbt-application-eks',
 });
 applicationPlaneStack.addDependency(controlPlaneStack);

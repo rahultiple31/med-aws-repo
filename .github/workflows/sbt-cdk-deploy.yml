@@ -84,7 +84,6 @@ jobs:
       - name: CDK Synth
         env:
           SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
-          NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
           CODESTAR_CONNECTION_ARN: ${{ secrets.CODESTAR_CONNECTION_ARN }}
         run: >
           npm run cdk -- synth ${{ steps.resolve_stack.outputs.stack_name }}
@@ -93,12 +92,10 @@ jobs:
           -c githubRepo="cdk-web"
           -c githubBranch="main"
           -c codestarConnectionArn="$CODESTAR_CONNECTION_ARN"
-          -c newRelicLicenseKey="$NEW_RELIC_LICENSE_KEY"
 
       - name: CDK Deploy
         env:
           SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
-          NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
           CODESTAR_CONNECTION_ARN: ${{ secrets.CODESTAR_CONNECTION_ARN }}
         run: >
           npm run cdk -- deploy ${{ steps.resolve_stack.outputs.stack_name }}
@@ -108,4 +105,3 @@ jobs:
           -c githubRepo="cdk-web"
           -c githubBranch="main"
           -c codestarConnectionArn="$CODESTAR_CONNECTION_ARN"
-          -c newRelicLicenseKey="$NEW_RELIC_LICENSE_KEY"

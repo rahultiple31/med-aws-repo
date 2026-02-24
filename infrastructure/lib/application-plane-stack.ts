@@ -8,7 +8,6 @@ import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
 export interface SbtApplicationPlaneStackProps extends cdk.StackProps {
@@ -16,7 +15,6 @@ export interface SbtApplicationPlaneStackProps extends cdk.StackProps {
   readonly appSecurityGroup: ec2.ISecurityGroup;
   readonly dbSecurityGroup: ec2.ISecurityGroup;
   readonly cacheSecurityGroup: ec2.ISecurityGroup;
-  readonly newRelicLicenseKey?: string;
   readonly eksClusterName?: string;
 }
 
@@ -202,35 +200,6 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    const newRelicLicenseKey = props.newRelicLicenseKey ?? 'REPLACE_WITH_NEW_RELIC_LICENSE_KEY';
-    const newRelicLicenseSecret = new secretsmanager.Secret(this, 'NewRelicLicenseSecret', {
-      description: 'New Relic license key used by nri-bundle in the EKS cluster.',
-      secretStringValue: cdk.SecretValue.unsafePlainText(newRelicLicenseKey),
-    });
-
-    this.cluster.addHelmChart('NewRelicNriBundle', {
-      repository: 'https://helm-charts.newrelic.com',
-      chart: 'nri-bundle',
-      release: 'newrelic',
-      namespace: 'newrelic',
-      createNamespace: true,
-      values: {
-        global: {
-          cluster: this.cluster.clusterName,
-          licenseKey: newRelicLicenseSecret.secretValue.unsafeUnwrap(),
-        },
-        'newrelic-infrastructure': {
-          enabled: true,
-        },
-        kubeEvents: {
-          enabled: true,
-        },
-        'newrelic-logging': {
-          enabled: true,
-        },
-      },
-    });
-
     new cdk.CfnOutput(this, 'EksClusterName', {
       value: this.cluster.clusterName,
     });
@@ -248,9 +217,6 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, 'ApplicationPlaneLogGroupName', {
       value: applicationLogGroup.logGroupName,
-    });
-    new cdk.CfnOutput(this, 'NewRelicLicenseSecretArn', {
-      value: newRelicLicenseSecret.secretArn,
     });
     new cdk.CfnOutput(this, 'EksDeploymentRoleArn', {
       value: this.eksDeploymentRole.roleArn,

@@ -13,7 +13,6 @@ This folder contains enterprise-ready AWS CDK stacks for a control plane and app
 
 - `SbtApplicationPlaneStack`
   - Amazon EKS (application deployment target)
-  - New Relic Helm bundle for EKS monitoring
   - Amazon RDS MySQL
   - Amazon ElastiCache Memcached
   - Amazon DynamoDB (application data)
@@ -34,13 +33,11 @@ Provide these values during synth/deploy:
 - `githubOwner` (default: `rahultiple31`)
 - `githubRepo` (default: `cdk-web`)
 - `githubBranch` (default: `main`)
-- `newRelicLicenseKey` (default placeholder if omitted)
 
 Equivalent environment variables:
 
 - `SBT_SYSTEM_ADMIN_EMAIL`
 - `CODESTAR_CONNECTION_ARN`
-- `NEW_RELIC_LICENSE_KEY`
 
 ## Commands
 
