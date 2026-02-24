@@ -51,6 +51,24 @@ jobs:
       - name: Install infrastructure dependencies
         run: npm install
 
+      - name: Validate callback URL secret
+        env:
+          CONTROL_PLANE_CALLBACK_URL: ${{ secrets.CONTROL_PLANE_CALLBACK_URL }}
+        run: |
+          if [ -z "$CONTROL_PLANE_CALLBACK_URL" ]; then
+            echo "Missing required secret: CONTROL_PLANE_CALLBACK_URL"
+            exit 1
+          fi
+
+          case "$CONTROL_PLANE_CALLBACK_URL" in
+            http://*|https://*)
+              ;;
+            *)
+              echo "CONTROL_PLANE_CALLBACK_URL must start with http:// or https://"
+              exit 1
+              ;;
+          esac
+
       - name: Resolve selected stack
         id: resolve_stack
         env:
@@ -85,9 +103,11 @@ jobs:
         env:
           SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
           CODESTAR_CONNECTION_ARN: ${{ secrets.CODESTAR_CONNECTION_ARN }}
+          CONTROL_PLANE_CALLBACK_URL: ${{ secrets.CONTROL_PLANE_CALLBACK_URL }}
         run: >
           npm run cdk -- synth ${{ steps.resolve_stack.outputs.stack_name }}
           -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL"
+          -c controlPlaneCallbackUrl="$CONTROL_PLANE_CALLBACK_URL"
           -c githubOwner="rahultiple31"
           -c githubRepo="cdk-web"
           -c githubBranch="main"
@@ -97,10 +117,12 @@ jobs:
         env:
           SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
           CODESTAR_CONNECTION_ARN: ${{ secrets.CODESTAR_CONNECTION_ARN }}
+          CONTROL_PLANE_CALLBACK_URL: ${{ secrets.CONTROL_PLANE_CALLBACK_URL }}
         run: >
           npm run cdk -- deploy ${{ steps.resolve_stack.outputs.stack_name }}
           --require-approval never
           -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL"
+          -c controlPlaneCallbackUrl="$CONTROL_PLANE_CALLBACK_URL"
           -c githubOwner="rahultiple31"
           -c githubRepo="cdk-web"
           -c githubBranch="main"
