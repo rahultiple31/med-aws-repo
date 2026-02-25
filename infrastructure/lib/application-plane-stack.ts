@@ -58,9 +58,10 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     });
 
     this.cluster.addNodegroupCapacity('ApplicationPlaneNodeGroup', {
-      desiredSize: 2,
-      minSize: 2,
-      maxSize: 6,
+      desiredSize: 1,
+      minSize: 1,
+      maxSize: 2,
+      amiType: eks.NodegroupAmiType.AL2023_X86_64_STANDARD,
       instanceTypes: [new ec2.InstanceType('m6i.large')],
       diskSize: 80,
       subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -116,7 +117,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       backupRetention: cdk.Duration.days(7),
       monitoringInterval: cdk.Duration.minutes(1),
       cloudwatchLogsExports: ['postgresql', 'upgrade'],
-      deletionProtection: true,
+      deletionProtection: false,
       removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
       databaseName: 'applicationdb',
     });
