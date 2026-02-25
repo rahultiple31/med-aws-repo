@@ -101,36 +101,43 @@ jobs:
 
             echo "Checking RDS deletion protection for ${stack_name}"
 
-            local db_instance_id
-            db_instance_id="$(aws cloudformation describe-stack-resource \
-              --stack-name "$stack_name" \
-              --logical-resource-id "ApplicationPostgresDatabase" \
-              --query "StackResourceDetail.PhysicalResourceId" \
-              --output text 2>/dev/null || true)"
-
-            if [ -z "$db_instance_id" ] || [ "$db_instance_id" = "None" ]; then
-              echo "No ApplicationPostgresDatabase resource found in ${stack_name}; continuing."
+            if ! aws cloudformation describe-stacks --stack-name "$stack_name" >/dev/null 2>&1; then
+              echo "Stack ${stack_name} not found; skipping RDS deletion protection checks."
               return 0
             fi
 
-            local deletion_protection
-            deletion_protection="$(aws rds describe-db-instances \
-              --db-instance-identifier "$db_instance_id" \
-              --query "DBInstances[0].DeletionProtection" \
-              --output text 2>/dev/null || true)"
+            local db_instance_ids
+            db_instance_ids="$(aws cloudformation list-stack-resources \
+              --stack-name "$stack_name" \
+              --query "StackResourceSummaries[?ResourceType=='AWS::RDS::DBInstance'].PhysicalResourceId" \
+              --output text)"
 
-            if [ "$deletion_protection" = "True" ]; then
-              echo "Disabling deletion protection on RDS instance ${db_instance_id}"
-              aws rds modify-db-instance \
-                --db-instance-identifier "$db_instance_id" \
-                --no-deletion-protection \
-                --apply-immediately >/dev/null
-
-              echo "Waiting for RDS instance ${db_instance_id} to become available"
-              aws rds wait db-instance-available --db-instance-identifier "$db_instance_id"
-            else
-              echo "Deletion protection already disabled (or instance not found)."
+            if [ -z "$db_instance_ids" ] || [ "$db_instance_ids" = "None" ]; then
+              echo "No RDS DB instances found in ${stack_name}; continuing."
+              return 0
             fi
+
+            for db_instance_id in $db_instance_ids; do
+              echo "Inspecting RDS instance ${db_instance_id}"
+              local deletion_protection
+              deletion_protection="$(aws rds describe-db-instances \
+                --db-instance-identifier "$db_instance_id" \
+                --query "DBInstances[0].DeletionProtection" \
+                --output text)"
+
+              if [ "$deletion_protection" = "True" ]; then
+                echo "Disabling deletion protection on RDS instance ${db_instance_id}"
+                aws rds modify-db-instance \
+                  --db-instance-identifier "$db_instance_id" \
+                  --no-deletion-protection \
+                  --apply-immediately >/dev/null
+
+                echo "Waiting for RDS instance ${db_instance_id} to become available"
+                aws rds wait db-instance-available --db-instance-identifier "$db_instance_id"
+              else
+                echo "Deletion protection already disabled on ${db_instance_id}."
+              fi
+            done
           }
 
           destroy_stack() {
