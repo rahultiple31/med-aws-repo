@@ -21,7 +21,7 @@ export interface SbtApplicationPlaneStackProps extends cdk.StackProps {
 export class SbtApplicationPlaneStack extends cdk.Stack {
   public readonly cluster: eks.Cluster;
   public readonly applicationDataTable: dynamodb.Table;
-  public readonly mysqlDatabase: rds.DatabaseInstance;
+  public readonly postgresDatabase: rds.DatabaseInstance;
   public readonly eksDeploymentRole: iam.Role;
 
   constructor(scope: Construct, id: string, props: SbtApplicationPlaneStackProps) {
@@ -67,6 +67,9 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       capacityType: eks.CapacityType.ON_DEMAND,
     });
 
+    /**
+     * EKS Deployment Role
+     */
     this.eksDeploymentRole = new iam.Role(this, 'EksDeploymentCodeBuildRole', {
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
       description: 'Role used by CodeBuild deploy stage to apply manifests to EKS.',
@@ -82,31 +85,41 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     this.cluster.addManifest('SbtAppNamespace', {
       apiVersion: 'v1',
       kind: 'Namespace',
-      metadata: {
-        name: 'sbt-app',
-      },
+      metadata: { name: 'sbt-app' },
     });
 
+    /**
+     * Update SG to allow PostgreSQL (5432)
+     */
     props.dbSecurityGroup.addIngressRule(
       ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
-      ec2.Port.tcp(3306),
-      'Allow workloads in VPC to connect to RDS MySQL'
+      ec2.Port.tcp(5432),
+      'Allow workloads in VPC to connect to PostgreSQL'
     );
+
     props.cacheSecurityGroup.addIngressRule(
       ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
       ec2.Port.tcp(11211),
       'Allow workloads in VPC to connect to Memcached'
     );
 
-    const mysqlCredentialsSecret = new rds.DatabaseSecret(this, 'MysqlCredentials', {
+    /**
+     * PostgreSQL Credentials
+     */
+    const postgresCredentialsSecret = new rds.DatabaseSecret(this, 'PostgresCredentials', {
       username: 'sbt_admin',
     });
 
-    this.mysqlDatabase = new rds.DatabaseInstance(this, 'ApplicationMysqlDatabase', {
+    /**
+     * RDS PostgreSQL (latest version)
+     */
+    this.postgresDatabase = new rds.DatabaseInstance(this, 'ApplicationPostgresDatabase', {
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      engine: rds.DatabaseInstanceEngine.mysql({ version: rds.MysqlEngineVersion.VER_8_0_39 }),
-      credentials: rds.Credentials.fromSecret(mysqlCredentialsSecret),
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.V16_3, // 🔥 Latest version (CDK v2)
+      }),
+      credentials: rds.Credentials.fromSecret(postgresCredentialsSecret),
       securityGroups: [props.dbSecurityGroup],
       multiAz: true,
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.M6I, ec2.InstanceSize.LARGE),
@@ -115,15 +128,20 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       storageEncrypted: true,
       backupRetention: cdk.Duration.days(7),
       monitoringInterval: cdk.Duration.minutes(1),
-      cloudwatchLogsExports: ['error', 'general', 'slowquery'],
+      cloudwatchLogsExports: ['postgresql'], // updated exports
       deletionProtection: true,
       removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
       databaseName: 'applicationdb',
     });
 
+    /**
+     * ElastiCache Memcached
+     */
     const memcachedSubnetGroup = new elasticache.CfnSubnetGroup(this, 'MemcachedSubnetGroup', {
       description: 'Subnets used by the application plane Memcached cluster.',
-      subnetIds: props.vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds,
+      subnetIds: props.vpc.selectSubnets({
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      }).subnetIds,
     });
 
     const memcachedCluster = new elasticache.CfnCacheCluster(this, 'MemcachedCluster', {
@@ -137,36 +155,37 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     });
     memcachedCluster.addDependency(memcachedSubnetGroup);
 
+    /**
+     * DynamoDB Table
+     */
     this.applicationDataTable = new dynamodb.Table(this, 'ApplicationDataTable', {
-      partitionKey: {
-        name: 'tenantId',
-        type: dynamodb.AttributeType.STRING,
-      },
-      sortKey: {
-        name: 'entityId',
-        type: dynamodb.AttributeType.STRING,
-      },
+      partitionKey: { name: 'tenantId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'entityId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecoverySpecification: {
-        pointInTimeRecoveryEnabled: true,
-      },
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
+    /**
+     * CloudWatch LogGroup
+     */
     const applicationLogGroup = new logs.LogGroup(this, 'ApplicationPlaneLogGroup', {
       logGroupName: '/sbt/application-plane/platform',
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    new cloudwatch.Alarm(this, 'RdsCpuHighAlarm', {
-      metric: this.mysqlDatabase.metricCPUUtilization({
+    /**
+     * CloudWatch Alarms
+     */
+    new cloudwatch.Alarm(this, 'RdsPostgresCpuHighAlarm', {
+      metric: this.postgresDatabase.metricCPUUtilization({
         period: cdk.Duration.minutes(5),
       }),
       threshold: 75,
       evaluationPeriods: 2,
-      alarmDescription: 'RDS MySQL CPU is high in the application plane.',
+      alarmDescription: 'RDS PostgreSQL CPU is high in the application plane.',
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
@@ -174,9 +193,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       metric: new cloudwatch.Metric({
         namespace: 'AWS/ElastiCache',
         metricName: 'CPUUtilization',
-        dimensionsMap: {
-          CacheClusterId: memcachedCluster.ref,
-        },
+        dimensionsMap: { CacheClusterId: memcachedCluster.ref },
         period: cdk.Duration.minutes(5),
         statistic: 'Average',
       }),
@@ -190,9 +207,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       metric: new cloudwatch.Metric({
         namespace: 'AWS/EKS',
         metricName: 'cluster_failed_node_count',
-        dimensionsMap: {
-          ClusterName: this.cluster.clusterName,
-        },
+        dimensionsMap: { ClusterName: this.cluster.clusterName },
         period: cdk.Duration.minutes(5),
         statistic: 'Maximum',
       }),
@@ -202,14 +217,17 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
+    /**
+     * Outputs
+     */
     new cdk.CfnOutput(this, 'EksClusterName', {
       value: this.cluster.clusterName,
     });
     new cdk.CfnOutput(this, 'EksClusterSecurityGroupId', {
       value: clusterControlPlaneSecurityGroup.securityGroupId,
     });
-    new cdk.CfnOutput(this, 'MysqlEndpointAddress', {
-      value: this.mysqlDatabase.dbInstanceEndpointAddress,
+    new cdk.CfnOutput(this, 'PostgresEndpointAddress', {
+      value: this.postgresDatabase.dbInstanceEndpointAddress,
     });
     new cdk.CfnOutput(this, 'MemcachedConfigurationEndpoint', {
       value: `${memcachedCluster.attrConfigurationEndpointAddress}:${memcachedCluster.attrConfigurationEndpointPort}`,
