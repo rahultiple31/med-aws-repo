@@ -93,9 +93,50 @@ jobs:
         run: |
           set -euo pipefail
 
+          disable_rds_deletion_protection_if_needed() {
+            local stack_name="$1"
+            if [ "$stack_name" != "SbtApplicationPlaneStack" ]; then
+              return 0
+            fi
+
+            echo "Checking RDS deletion protection for ${stack_name}"
+
+            local db_instance_id
+            db_instance_id="$(aws cloudformation describe-stack-resource \
+              --stack-name "$stack_name" \
+              --logical-resource-id "ApplicationPostgresDatabase" \
+              --query "StackResourceDetail.PhysicalResourceId" \
+              --output text 2>/dev/null || true)"
+
+            if [ -z "$db_instance_id" ] || [ "$db_instance_id" = "None" ]; then
+              echo "No ApplicationPostgresDatabase resource found in ${stack_name}; continuing."
+              return 0
+            fi
+
+            local deletion_protection
+            deletion_protection="$(aws rds describe-db-instances \
+              --db-instance-identifier "$db_instance_id" \
+              --query "DBInstances[0].DeletionProtection" \
+              --output text 2>/dev/null || true)"
+
+            if [ "$deletion_protection" = "True" ]; then
+              echo "Disabling deletion protection on RDS instance ${db_instance_id}"
+              aws rds modify-db-instance \
+                --db-instance-identifier "$db_instance_id" \
+                --no-deletion-protection \
+                --apply-immediately >/dev/null
+
+              echo "Waiting for RDS instance ${db_instance_id} to become available"
+              aws rds wait db-instance-available --db-instance-identifier "$db_instance_id"
+            else
+              echo "Deletion protection already disabled (or instance not found)."
+            fi
+          }
+
           destroy_stack() {
             local stack_name="$1"
             echo "Destroying ${stack_name}"
+            disable_rds_deletion_protection_if_needed "$stack_name"
             npm run cdk -- destroy "${stack_name}" --force \
               -c @aws-cdk/core:bootstrapQualifier="$CDK_BOOTSTRAP_QUALIFIER" \
               -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL" \
