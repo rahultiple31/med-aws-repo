@@ -1,4 +1,4 @@
-import { KubectlV29Layer } from '@aws-cdk/lambda-layer-kubectl-v29';
+import { KubectlV34Layer } from '@aws-cdk/lambda-layer-kubectl-v34';
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -21,7 +21,7 @@ export interface SbtApplicationPlaneStackProps extends cdk.StackProps {
 export class SbtApplicationPlaneStack extends cdk.Stack {
   public readonly cluster: eks.Cluster;
   public readonly applicationDataTable: dynamodb.Table;
-  public readonly mysqlDatabase: rds.DatabaseInstance;
+  public readonly postgresDatabase: rds.DatabaseInstance;
   public readonly eksDeploymentRole: iam.Role;
 
   constructor(scope: Construct, id: string, props: SbtApplicationPlaneStackProps) {
@@ -43,13 +43,13 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
 
     this.cluster = new eks.Cluster(this, 'ApplicationPlaneEksCluster', {
       clusterName: props.eksClusterName ?? 'sbt-application-eks',
-      version: eks.KubernetesVersion.V1_29,
+      version: eks.KubernetesVersion.V1_34,
       vpc: props.vpc,
       vpcSubnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
       defaultCapacity: 0,
       mastersRole: clusterAdmin,
       securityGroup: clusterControlPlaneSecurityGroup,
-      kubectlLayer: new KubectlV29Layer(this, 'KubectlLayer'),
+      kubectlLayer: new KubectlV34Layer(this, 'KubectlLayer'),
       clusterLogging: [
         eks.ClusterLoggingTypes.API,
         eks.ClusterLoggingTypes.AUDIT,
@@ -89,8 +89,8 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
 
     props.dbSecurityGroup.addIngressRule(
       ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
-      ec2.Port.tcp(3306),
-      'Allow workloads in VPC to connect to RDS MySQL'
+      ec2.Port.tcp(5432),
+      'Allow workloads in VPC to connect to RDS PostgreSQL'
     );
     props.cacheSecurityGroup.addIngressRule(
       ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
@@ -98,15 +98,15 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       'Allow workloads in VPC to connect to Memcached'
     );
 
-    const mysqlCredentialsSecret = new rds.DatabaseSecret(this, 'MysqlCredentials', {
+    const postgresCredentialsSecret = new rds.DatabaseSecret(this, 'PostgresCredentials', {
       username: 'sbt_admin',
     });
 
-    this.mysqlDatabase = new rds.DatabaseInstance(this, 'ApplicationMysqlDatabase', {
+    this.postgresDatabase = new rds.DatabaseInstance(this, 'ApplicationPostgresDatabase', {
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      engine: rds.DatabaseInstanceEngine.mysql({ version: rds.MysqlEngineVersion.VER_8_0_39 }),
-      credentials: rds.Credentials.fromSecret(mysqlCredentialsSecret),
+      engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.VER_16_4 }),
+      credentials: rds.Credentials.fromSecret(postgresCredentialsSecret),
       securityGroups: [props.dbSecurityGroup],
       multiAz: true,
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.M6I, ec2.InstanceSize.LARGE),
@@ -115,7 +115,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       storageEncrypted: true,
       backupRetention: cdk.Duration.days(7),
       monitoringInterval: cdk.Duration.minutes(1),
-      cloudwatchLogsExports: ['error', 'general', 'slowquery'],
+      cloudwatchLogsExports: ['postgresql', 'upgrade'],
       deletionProtection: true,
       removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
       databaseName: 'applicationdb',
@@ -161,12 +161,12 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     });
 
     new cloudwatch.Alarm(this, 'RdsCpuHighAlarm', {
-      metric: this.mysqlDatabase.metricCPUUtilization({
+      metric: this.postgresDatabase.metricCPUUtilization({
         period: cdk.Duration.minutes(5),
       }),
       threshold: 75,
       evaluationPeriods: 2,
-      alarmDescription: 'RDS MySQL CPU is high in the application plane.',
+      alarmDescription: 'RDS PostgreSQL CPU is high in the application plane.',
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
@@ -208,8 +208,8 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'EksClusterSecurityGroupId', {
       value: clusterControlPlaneSecurityGroup.securityGroupId,
     });
-    new cdk.CfnOutput(this, 'MysqlEndpointAddress', {
-      value: this.mysqlDatabase.dbInstanceEndpointAddress,
+    new cdk.CfnOutput(this, 'PostgresEndpointAddress', {
+      value: this.postgresDatabase.dbInstanceEndpointAddress,
     });
     new cdk.CfnOutput(this, 'MemcachedConfigurationEndpoint', {
       value: `${memcachedCluster.attrConfigurationEndpointAddress}:${memcachedCluster.attrConfigurationEndpointPort}`,

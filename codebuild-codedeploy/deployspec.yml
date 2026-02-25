@@ -4,7 +4,7 @@ phases:
   install:
     commands:
       - echo "Installing kubectl for EKS deployment"
-      - curl -sSL -o kubectl https://dl.k8s.io/release/v1.29.0/bin/linux/amd64/kubectl
+      - curl -sSL -o kubectl https://dl.k8s.io/release/v1.34.0/bin/linux/amd64/kubectl
       - install -m 0755 kubectl /usr/local/bin/kubectl
       - kubectl version --client
   pre_build:

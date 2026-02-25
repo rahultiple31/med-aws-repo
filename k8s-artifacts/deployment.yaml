@@ -28,10 +28,10 @@ spec:
               value: "3000"
             - name: DYNAMODB_TABLE
               value: ApplicationDataTable
-            - name: MYSQL_HOST
+            - name: POSTGRES_HOST
               value: REPLACE_WITH_RDS_ENDPOINT
-            - name: MYSQL_PORT
-              value: "3306"
+            - name: POSTGRES_PORT
+              value: "5432"
             - name: MEMCACHED_ENDPOINT
               value: REPLACE_WITH_MEMCACHED_ENDPOINT
           resources:
