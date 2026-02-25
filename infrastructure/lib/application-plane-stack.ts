@@ -117,7 +117,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.V16_3, // 🔥 Latest version (CDK v2)
+        version: rds.PostgresEngineVersion.V16_1, // 🔥 Latest version (CDK v2)
       }),
       credentials: rds.Credentials.fromSecret(postgresCredentialsSecret),
       securityGroups: [props.dbSecurityGroup],
