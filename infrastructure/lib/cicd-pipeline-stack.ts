@@ -1,144 +1,227 @@
+import { KubectlV29Layer } from '@aws-cdk/lambda-layer-kubectl-v29';
 import * as cdk from 'aws-cdk-lib';
-import * as codebuild from 'aws-cdk-lib/aws-codebuild';
-import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
-import * as actions from 'aws-cdk-lib/aws-codepipeline-actions';
-import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as eks from 'aws-cdk-lib/aws-eks';
+import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
 import { Construct } from 'constructs';
 
-export interface SbtCiCdPipelineStackProps extends cdk.StackProps {
-  readonly eksClusterName: string;
-  readonly eksDeployRoleArn: string;
-  readonly githubOwner: string;
-  readonly githubRepo: string;
-  readonly githubBranch: string;
-  readonly codestarConnectionArn: string;
+export interface SbtApplicationPlaneStackProps extends cdk.StackProps {
+  readonly vpc: ec2.IVpc;
+  readonly appSecurityGroup: ec2.ISecurityGroup;
+  readonly dbSecurityGroup: ec2.ISecurityGroup;
+  readonly cacheSecurityGroup: ec2.ISecurityGroup;
+  readonly eksClusterName?: string;
 }
 
-export class SbtCiCdPipelineStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: SbtCiCdPipelineStackProps) {
+export class SbtApplicationPlaneStack extends cdk.Stack {
+  public readonly cluster: eks.Cluster;
+  public readonly applicationDataTable: dynamodb.Table;
+  public readonly mysqlDatabase: rds.DatabaseInstance;
+  public readonly eksDeploymentRole: iam.Role;
+
+  constructor(scope: Construct, id: string, props: SbtApplicationPlaneStackProps) {
     super(scope, id, props);
 
-    const artifactBucket = new s3.Bucket(this, 'PipelineArtifactBucket', {
-      versioned: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      enforceSSL: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+    const clusterAdmin = new iam.Role(this, 'EksClusterAdminRole', {
+      assumedBy: new iam.AccountRootPrincipal(),
+    });
+
+    const clusterControlPlaneSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'EksControlPlaneSecurityGroup',
+      {
+        vpc: props.vpc,
+        allowAllOutbound: true,
+        description: 'Security group for EKS control plane traffic.',
+      }
+    );
+
+    this.cluster = new eks.Cluster(this, 'ApplicationPlaneEksCluster', {
+      clusterName: props.eksClusterName ?? 'sbt-application-eks',
+      version: eks.KubernetesVersion.V1_29,
+      vpc: props.vpc,
+      vpcSubnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
+      defaultCapacity: 0,
+      mastersRole: clusterAdmin,
+      securityGroup: clusterControlPlaneSecurityGroup,
+      kubectlLayer: new KubectlV29Layer(this, 'KubectlLayer'),
+      clusterLogging: [
+        eks.ClusterLoggingTypes.API,
+        eks.ClusterLoggingTypes.AUDIT,
+        eks.ClusterLoggingTypes.AUTHENTICATOR,
+      ],
+    });
+
+    this.cluster.addNodegroupCapacity('ApplicationPlaneNodeGroup', {
+      desiredSize: 2,
+      minSize: 2,
+      maxSize: 6,
+      instanceTypes: [new ec2.InstanceType('m6i.large')],
+      diskSize: 80,
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      capacityType: eks.CapacityType.ON_DEMAND,
+    });
+
+    this.eksDeploymentRole = new iam.Role(this, 'EksDeploymentCodeBuildRole', {
+      assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
+      description: 'Role used by CodeBuild deploy stage to apply manifests to EKS.',
+    });
+    this.eksDeploymentRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['eks:DescribeCluster'],
+        resources: [this.cluster.clusterArn],
+      })
+    );
+    this.cluster.awsAuth.addMastersRole(this.eksDeploymentRole);
+
+    this.cluster.addManifest('SbtAppNamespace', {
+      apiVersion: 'v1',
+      kind: 'Namespace',
+      metadata: {
+        name: 'sbt-app',
+      },
+    });
+
+    props.dbSecurityGroup.addIngressRule(
+      ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
+      ec2.Port.tcp(3306),
+      'Allow workloads in VPC to connect to RDS MySQL'
+    );
+    props.cacheSecurityGroup.addIngressRule(
+      ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
+      ec2.Port.tcp(11211),
+      'Allow workloads in VPC to connect to Memcached'
+    );
+
+    const mysqlCredentialsSecret = new rds.DatabaseSecret(this, 'MysqlCredentials', {
+      username: 'sbt_admin',
+    });
+
+    this.mysqlDatabase = new rds.DatabaseInstance(this, 'ApplicationMysqlDatabase', {
+      vpc: props.vpc,
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      engine: rds.DatabaseInstanceEngine.mysql({ version: rds.MysqlEngineVersion.VER_8_0_39 }),
+      credentials: rds.Credentials.fromSecret(mysqlCredentialsSecret),
+      securityGroups: [props.dbSecurityGroup],
+      multiAz: true,
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.M6I, ec2.InstanceSize.LARGE),
+      allocatedStorage: 100,
+      maxAllocatedStorage: 500,
+      storageEncrypted: true,
+      backupRetention: cdk.Duration.days(7),
+      monitoringInterval: cdk.Duration.minutes(1),
+      cloudwatchLogsExports: ['error', 'general', 'slowquery'],
+      deletionProtection: true,
+      removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
+      databaseName: 'applicationdb',
+    });
+
+    const memcachedSubnetGroup = new elasticache.CfnSubnetGroup(this, 'MemcachedSubnetGroup', {
+      description: 'Subnets used by the application plane Memcached cluster.',
+      subnetIds: props.vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds,
+    });
+
+    const memcachedCluster = new elasticache.CfnCacheCluster(this, 'MemcachedCluster', {
+      engine: 'memcached',
+      cacheNodeType: 'cache.t3.small',
+      numCacheNodes: 2,
+      port: 11211,
+      azMode: 'cross-az',
+      cacheSubnetGroupName: memcachedSubnetGroup.ref,
+      vpcSecurityGroupIds: [props.cacheSecurityGroup.securityGroupId],
+    });
+    memcachedCluster.addDependency(memcachedSubnetGroup);
+
+    this.applicationDataTable = new dynamodb.Table(this, 'ApplicationDataTable', {
+      partitionKey: {
+        name: 'tenantId',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'entityId',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    const containerRepository = new ecr.Repository(this, 'ApplicationEcrRepository', {
-      repositoryName: `${props.githubRepo}-app`,
-      imageScanOnPush: true,
-      encryption: ecr.RepositoryEncryption.AES_256,
+    const applicationLogGroup = new logs.LogGroup(this, 'ApplicationPlaneLogGroup', {
+      logGroupName: '/sbt/application-plane/platform',
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    const buildProject = new codebuild.PipelineProject(this, 'SbtCodeBuildProject', {
-      environment: {
-        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-        privileged: true,
-      },
-      buildSpec: codebuild.BuildSpec.fromSourceFilename('codebuild-codedeploy/buildspec.yml'),
-      environmentVariables: {
-        ECR_REPOSITORY_URI: { value: containerRepository.repositoryUri },
-        GITHUB_REPOSITORY_URL: {
-          value: `https://github.com/${props.githubOwner}/${props.githubRepo}.git`,
+    new cloudwatch.Alarm(this, 'RdsCpuHighAlarm', {
+      metric: this.mysqlDatabase.metricCPUUtilization({
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 75,
+      evaluationPeriods: 2,
+      alarmDescription: 'RDS MySQL CPU is high in the application plane.',
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    new cloudwatch.Alarm(this, 'MemcachedCpuHighAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/ElastiCache',
+        metricName: 'CPUUtilization',
+        dimensionsMap: {
+          CacheClusterId: memcachedCluster.ref,
         },
-        GITHUB_BRANCH: { value: props.githubBranch },
-      },
-    });
-    containerRepository.grantPullPush(buildProject);
-    buildProject.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['ecr:GetAuthorizationToken'],
-        resources: ['*'],
-      })
-    );
-
-    const eksDeploymentRole = iam.Role.fromRoleArn(
-      this,
-      'ImportedEksDeploymentCodeBuildRole',
-      props.eksDeployRoleArn
-    );
-
-    const deployProject = new codebuild.PipelineProject(this, 'SbtEksDeployProject', {
-      role: eksDeploymentRole,
-      environment: {
-        buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
-      },
-      buildSpec: codebuild.BuildSpec.fromSourceFilename('deployspec.yml'),
-      environmentVariables: {
-        EKS_CLUSTER_NAME: { value: props.eksClusterName },
-        AWS_DEFAULT_REGION: { value: cdk.Stack.of(this).region },
-      },
+        period: cdk.Duration.minutes(5),
+        statistic: 'Average',
+      }),
+      threshold: 80,
+      evaluationPeriods: 2,
+      alarmDescription: 'Memcached CPU utilization is above enterprise threshold.',
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    const sourceOutput = new codepipeline.Artifact('SourceArtifact');
-    const buildOutput = new codepipeline.Artifact('BuildArtifact');
-
-    const pipeline = new codepipeline.Pipeline(this, 'SbtEnterpriseCodePipeline', {
-      pipelineType: codepipeline.PipelineType.V2,
-      crossAccountKeys: false,
-      artifactBucket,
+    new cloudwatch.Alarm(this, 'EksFailedNodesAlarm', {
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/EKS',
+        metricName: 'cluster_failed_node_count',
+        dimensionsMap: {
+          ClusterName: this.cluster.clusterName,
+        },
+        period: cdk.Duration.minutes(5),
+        statistic: 'Maximum',
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      alarmDescription: 'The EKS cluster reports failed nodes.',
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    pipeline.addStage({
-      stageName: 'Source',
-      actions: [
-        new actions.CodeStarConnectionsSourceAction({
-          actionName: 'GitHubSource',
-          owner: props.githubOwner,
-          repo: props.githubRepo,
-          branch: props.githubBranch,
-          connectionArn: props.codestarConnectionArn,
-          output: sourceOutput,
-          triggerOnPush: true,
-        }),
-      ],
+    new cdk.CfnOutput(this, 'EksClusterName', {
+      value: this.cluster.clusterName,
     });
-
-    pipeline.addStage({
-      stageName: 'Build',
-      actions: [
-        new actions.CodeBuildAction({
-          actionName: 'CodeBuildPackage',
-          project: buildProject,
-          input: sourceOutput,
-          outputs: [buildOutput],
-        }),
-      ],
+    new cdk.CfnOutput(this, 'EksClusterSecurityGroupId', {
+      value: clusterControlPlaneSecurityGroup.securityGroupId,
     });
-
-    pipeline.addStage({
-      stageName: 'Deploy',
-      actions: [
-        new actions.CodeBuildAction({
-          actionName: 'CodeDeployToEks',
-          project: deployProject,
-          input: buildOutput,
-        }),
-      ],
+    new cdk.CfnOutput(this, 'MysqlEndpointAddress', {
+      value: this.mysqlDatabase.dbInstanceEndpointAddress,
     });
-
-    pipeline.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['codestar-connections:UseConnection'],
-        resources: [props.codestarConnectionArn],
-      })
-    );
-
-    new cdk.CfnOutput(this, 'CodePipelineName', {
-      value: pipeline.pipelineName,
+    new cdk.CfnOutput(this, 'MemcachedConfigurationEndpoint', {
+      value: `${memcachedCluster.attrConfigurationEndpointAddress}:${memcachedCluster.attrConfigurationEndpointPort}`,
     });
-    new cdk.CfnOutput(this, 'CodeBuildProjectName', {
-      value: buildProject.projectName,
+    new cdk.CfnOutput(this, 'ApplicationDataTableName', {
+      value: this.applicationDataTable.tableName,
     });
-    new cdk.CfnOutput(this, 'CodeDeployProjectName', {
-      value: deployProject.projectName,
+    new cdk.CfnOutput(this, 'ApplicationPlaneLogGroupName', {
+      value: applicationLogGroup.logGroupName,
     });
-    new cdk.CfnOutput(this, 'EcrRepositoryUri', {
-      value: containerRepository.repositoryUri,
+    new cdk.CfnOutput(this, 'EksDeploymentRoleArn', {
+      value: this.eksDeploymentRole.roleArn,
     });
   }
 }
