@@ -110,7 +110,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       credentials: rds.Credentials.fromSecret(postgresCredentialsSecret),
       securityGroups: [props.dbSecurityGroup],
       multiAz: true,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.M6I, ec2.InstanceSize.LARGE),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
       allocatedStorage: 100,
       maxAllocatedStorage: 500,
       storageEncrypted: true,
