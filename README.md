@@ -21,7 +21,7 @@ flowchart LR
 
   subgraph Application Plane
     AP1[EKS Cluster + NodeGroup]
-    AP2[RDS PostgreSQL 17.6-R2<br/>db.m5.large]
+    AP2[RDS PostgreSQL 17.6<br/>db.m5.large]
     AP3[ElastiCache Memcached]
     AP4[Application DynamoDB]
     AP5[CloudWatch Logs/Alarms]

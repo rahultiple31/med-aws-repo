@@ -28,7 +28,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: SbtApplicationPlaneStackProps) {
     super(scope, id, props);
 
-    const postgresEngineVersion = rds.PostgresEngineVersion.of('17.6-R2', '17');
+    const postgresEngineVersion = rds.PostgresEngineVersion.of('17.6', '17');
     const postgresInstanceType = ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE);
 
     const clusterAdmin = new iam.Role(this, 'EksClusterAdminRole', {
@@ -95,7 +95,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     props.dbSecurityGroup.addIngressRule(
       ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
       ec2.Port.tcp(5432),
-      'Allow workloads in VPC to connect to RDS PostgreSQL 17.6-R2'
+      'Allow workloads in VPC to connect to RDS PostgreSQL 17.6'
     );
     props.cacheSecurityGroup.addIngressRule(
       ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
@@ -219,7 +219,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       value: this.postgresDatabase.dbInstanceEndpointAddress,
     });
     new cdk.CfnOutput(this, 'PostgresEngineVersion', {
-      value: '17.6-R2',
+      value: '17.6',
     });
     new cdk.CfnOutput(this, 'PostgresInstanceType', {
       value: 'db.m5.large',

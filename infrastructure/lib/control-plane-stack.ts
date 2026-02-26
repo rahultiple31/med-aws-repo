@@ -55,7 +55,7 @@ export class SbtControlPlaneStack extends cdk.Stack {
     this.dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
       vpc: this.vpc,
       allowAllOutbound: true,
-      description: 'Security group attached to RDS PostgreSQL 17.6-R2 instances.',
+      description: 'Security group attached to RDS PostgreSQL 17.6 instances.',
     });
 
     this.cacheSecurityGroup = new ec2.SecurityGroup(this, 'MemcachedSecurityGroup', {
@@ -67,7 +67,7 @@ export class SbtControlPlaneStack extends cdk.Stack {
     this.dbSecurityGroup.addIngressRule(
       this.appSecurityGroup,
       ec2.Port.tcp(5432),
-      'Allow application plane to access PostgreSQL 17.6-R2'
+      'Allow application plane to access PostgreSQL 17.6'
     );
     this.cacheSecurityGroup.addIngressRule(
       this.appSecurityGroup,
