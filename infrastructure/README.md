@@ -29,20 +29,28 @@ This folder contains enterprise-ready AWS CDK stacks for a control plane and app
 Provide these values during synth/deploy:
 
 - `systemAdminEmail` (required)
-- `codestarConnectionArn` (required for GitHub source stage)
 - `githubOwner` (default: `rahultiple31`)
 - `githubRepo` (default: `cdk-web`)
 - `githubBranch` (default: `main`)
+- `sourceArtifactObjectKey` (default: `source.zip`)
 
 Equivalent environment variables:
 
 - `SBT_SYSTEM_ADMIN_EMAIL`
-- `CODESTAR_CONNECTION_ARN`
 
 ## Commands
 
 ```bash
 npm install
-npm run synth -- -c systemAdminEmail=admin@example.com -c codestarConnectionArn=arn:aws:codestar-connections:REGION:ACCOUNT:connection/ID
-npm run deploy -- -c systemAdminEmail=admin@example.com -c codestarConnectionArn=arn:aws:codestar-connections:REGION:ACCOUNT:connection/ID
+npm run synth -- -c systemAdminEmail=admin@example.com
+npm run deploy -- -c systemAdminEmail=admin@example.com
 ```
+
+## Pipeline Source (S3)
+
+`SbtCiCdPipelineStack` now uses Amazon S3 as the CodePipeline source.
+
+- Upload a source zip (`source.zip` by default) to the output bucket/key:
+  - `SourceArtifactBucketName`
+  - `SourceArtifactObjectKey`
+- The pipeline source stage polls this S3 object for changes.

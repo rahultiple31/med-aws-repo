@@ -123,7 +123,6 @@ jobs:
       - name: CDK Synth
         env:
           SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
-          CODESTAR_CONNECTION_ARN: ${{ secrets.CODESTAR_CONNECTION_ARN }}
           CONTROL_PLANE_CALLBACK_URL: ${{ secrets.CONTROL_PLANE_CALLBACK_URL }}
         run: >
           npm run cdk -- synth ${{ steps.resolve_stack.outputs.stack_name }}
@@ -133,12 +132,11 @@ jobs:
           -c githubOwner="rahultiple31"
           -c githubRepo="cdk-web"
           -c githubBranch="main"
-          -c codestarConnectionArn="$CODESTAR_CONNECTION_ARN"
+
 
       - name: CDK Deploy
         env:
           SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
-          CODESTAR_CONNECTION_ARN: ${{ secrets.CODESTAR_CONNECTION_ARN }}
           CONTROL_PLANE_CALLBACK_URL: ${{ secrets.CONTROL_PLANE_CALLBACK_URL }}
         run: >
           npm run cdk -- deploy ${{ steps.resolve_stack.outputs.stack_name }}
@@ -149,4 +147,4 @@ jobs:
           -c githubOwner="rahultiple31"
           -c githubRepo="cdk-web"
           -c githubBranch="main"
-          -c codestarConnectionArn="$CODESTAR_CONNECTION_ARN"
+

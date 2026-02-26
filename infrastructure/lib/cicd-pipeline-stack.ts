@@ -13,7 +13,7 @@ export interface SbtCiCdPipelineStackProps extends cdk.StackProps {
   readonly githubOwner: string;
   readonly githubRepo: string;
   readonly githubBranch: string;
-  readonly codestarConnectionArn: string;
+  readonly sourceArtifactObjectKey?: string;
 }
 
 export class SbtCiCdPipelineStack extends cdk.Stack {
@@ -27,6 +27,7 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
+    const sourceArtifactObjectKey = props.sourceArtifactObjectKey ?? 'source.zip';
 
     const containerRepository = new ecr.Repository(this, 'ApplicationEcrRepository', {
       repositoryName: `${props.githubRepo}-app`,
@@ -86,14 +87,12 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
     pipeline.addStage({
       stageName: 'Source',
       actions: [
-        new actions.CodeStarConnectionsSourceAction({
-          actionName: 'GitHubSource',
-          owner: props.githubOwner,
-          repo: props.githubRepo,
-          branch: props.githubBranch,
-          connectionArn: props.codestarConnectionArn,
+        new actions.S3SourceAction({
+          actionName: 'S3Source',
+          bucket: artifactBucket,
+          bucketKey: sourceArtifactObjectKey,
           output: sourceOutput,
-          triggerOnPush: true,
+          trigger: actions.S3Trigger.POLL,
         }),
       ],
     });
@@ -121,13 +120,6 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
       ],
     });
 
-    pipeline.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['codestar-connections:UseConnection'],
-        resources: [props.codestarConnectionArn],
-      })
-    );
-
     new cdk.CfnOutput(this, 'CodePipelineName', {
       value: pipeline.pipelineName,
     });
@@ -139,6 +131,12 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, 'EcrRepositoryUri', {
       value: containerRepository.repositoryUri,
+    });
+    new cdk.CfnOutput(this, 'SourceArtifactBucketName', {
+      value: artifactBucket.bucketName,
+    });
+    new cdk.CfnOutput(this, 'SourceArtifactObjectKey', {
+      value: sourceArtifactObjectKey,
     });
   }
 }

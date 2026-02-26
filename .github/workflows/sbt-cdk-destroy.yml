@@ -88,22 +88,69 @@ jobs:
         env:
           STACK_CHOICE: ${{ github.event.inputs.stack }}
           SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
-          CODESTAR_CONNECTION_ARN: ${{ secrets.CODESTAR_CONNECTION_ARN }}
           CONTROL_PLANE_CALLBACK_URL: ${{ secrets.CONTROL_PLANE_CALLBACK_URL }}
         run: |
           set -euo pipefail
 
+          disable_rds_deletion_protection_if_needed() {
+            local stack_name="$1"
+            if [ "$stack_name" != "SbtApplicationPlaneStack" ]; then
+              return 0
+            fi
+
+            echo "Checking RDS deletion protection for ${stack_name}"
+
+            if ! aws cloudformation describe-stacks --stack-name "$stack_name" >/dev/null 2>&1; then
+              echo "Stack ${stack_name} not found; skipping RDS deletion protection checks."
+              return 0
+            fi
+
+            local db_instance_ids
+            db_instance_ids="$(aws cloudformation list-stack-resources \
+              --stack-name "$stack_name" \
+              --query "StackResourceSummaries[?ResourceType=='AWS::RDS::DBInstance'].PhysicalResourceId" \
+              --output text)"
+
+            if [ -z "$db_instance_ids" ] || [ "$db_instance_ids" = "None" ]; then
+              echo "No RDS DB instances found in ${stack_name}; continuing."
+              return 0
+            fi
+
+            for db_instance_id in $db_instance_ids; do
+              echo "Inspecting RDS instance ${db_instance_id}"
+              local deletion_protection
+              deletion_protection="$(aws rds describe-db-instances \
+                --db-instance-identifier "$db_instance_id" \
+                --query "DBInstances[0].DeletionProtection" \
+                --output text)"
+
+              if [ "$deletion_protection" = "True" ]; then
+                echo "Disabling deletion protection on RDS instance ${db_instance_id}"
+                aws rds modify-db-instance \
+                  --db-instance-identifier "$db_instance_id" \
+                  --no-deletion-protection \
+                  --apply-immediately >/dev/null
+
+                echo "Waiting for RDS instance ${db_instance_id} to become available"
+                aws rds wait db-instance-available --db-instance-identifier "$db_instance_id"
+              else
+                echo "Deletion protection already disabled on ${db_instance_id}."
+              fi
+            done
+          }
+
           destroy_stack() {
             local stack_name="$1"
             echo "Destroying ${stack_name}"
+            disable_rds_deletion_protection_if_needed "$stack_name"
             npm run cdk -- destroy "${stack_name}" --force \
               -c @aws-cdk/core:bootstrapQualifier="$CDK_BOOTSTRAP_QUALIFIER" \
               -c systemAdminEmail="$SBT_SYSTEM_ADMIN_EMAIL" \
               -c controlPlaneCallbackUrl="$CONTROL_PLANE_CALLBACK_URL" \
               -c githubOwner="rahultiple31" \
               -c githubRepo="cdk-web" \
-              -c githubBranch="main" \
-              -c codestarConnectionArn="$CODESTAR_CONNECTION_ARN"
+              -c githubBranch="main"
+
           }
 
           case "$STACK_CHOICE" in

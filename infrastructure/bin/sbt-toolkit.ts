@@ -22,10 +22,7 @@ const githubOwner = app.node.tryGetContext('githubOwner') ?? 'rahultiple31';
 const githubRepo = app.node.tryGetContext('githubRepo') ?? 'cdk-web';
 const githubBranch = app.node.tryGetContext('githubBranch') ?? 'main';
 const eksClusterName = app.node.tryGetContext('eksClusterName') ?? 'sbt-application-eks';
-const codestarConnectionArn =
-  app.node.tryGetContext('codestarConnectionArn') ??
-  process.env.CODESTAR_CONNECTION_ARN ??
-  'arn:aws:codestar-connections:us-east-1:111111111111:connection/replace-me';
+const sourceArtifactObjectKey = app.node.tryGetContext('sourceArtifactObjectKey') ?? 'source.zip';
 
 const controlPlaneStack = new SbtControlPlaneStack(app, 'SbtControlPlaneStack', {
   env,
@@ -51,6 +48,6 @@ const cicdPipelineStack = new SbtCiCdPipelineStack(app, 'SbtCiCdPipelineStack', 
   githubOwner,
   githubRepo,
   githubBranch,
-  codestarConnectionArn,
+  sourceArtifactObjectKey,
 });
 cicdPipelineStack.addDependency(applicationPlaneStack);
