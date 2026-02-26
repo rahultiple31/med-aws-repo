@@ -66,7 +66,7 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
       { mutable: true }
     );
     artifactBucket.grantReadWrite(eksDeploymentRole);
-    eksDeploymentRole.addToPolicy(
+    eksDeploymentRole.grantPrincipal.addToPrincipalPolicy(
       new iam.PolicyStatement({
         actions: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'],
         resources: ['*'],
