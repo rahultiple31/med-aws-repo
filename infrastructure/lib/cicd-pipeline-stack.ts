@@ -10,6 +10,9 @@ import { Construct } from 'constructs';
 export interface SbtCiCdPipelineStackProps extends cdk.StackProps {
   readonly eksClusterName: string;
   readonly eksDeployRoleArn: string;
+  readonly postgresEndpointAddress: string;
+  readonly memcachedConfigurationEndpoint: string;
+  readonly applicationDataTableName: string;
   readonly githubOwner: string;
   readonly githubRepo: string;
   readonly githubBranch: string;
@@ -43,10 +46,9 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
       buildSpec: codebuild.BuildSpec.fromSourceFilename('codebuild-codedeploy/buildspec.yml'),
       environmentVariables: {
         ECR_REPOSITORY_URI: { value: containerRepository.repositoryUri },
-        GITHUB_REPOSITORY_URL: {
-          value: `https://github.com/${props.githubOwner}/${props.githubRepo}.git`,
-        },
-        GITHUB_BRANCH: { value: props.githubBranch },
+        POSTGRES_ENDPOINT: { value: props.postgresEndpointAddress },
+        MEMCACHED_ENDPOINT: { value: props.memcachedConfigurationEndpoint },
+        DYNAMODB_TABLE_NAME: { value: props.applicationDataTableName },
       },
     });
     containerRepository.grantPullPush(buildProject);

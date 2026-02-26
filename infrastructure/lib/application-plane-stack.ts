@@ -22,10 +22,14 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
   public readonly cluster: eks.Cluster;
   public readonly applicationDataTable: dynamodb.Table;
   public readonly postgresDatabase: rds.DatabaseInstance;
+  public readonly memcachedCluster: elasticache.CfnCacheCluster;
   public readonly eksDeploymentRole: iam.Role;
 
   constructor(scope: Construct, id: string, props: SbtApplicationPlaneStackProps) {
     super(scope, id, props);
+
+    const postgresEngineVersion = rds.PostgresEngineVersion.of('17.6-R2', '17');
+    const postgresInstanceType = ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE);
 
     const clusterAdmin = new iam.Role(this, 'EksClusterAdminRole', {
       assumedBy: new iam.AccountRootPrincipal(),
@@ -71,6 +75,9 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     this.eksDeploymentRole = new iam.Role(this, 'EksDeploymentCodeBuildRole', {
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
       description: 'Role used by CodeBuild deploy stage to apply manifests to EKS.',
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSCodeBuildServiceRole'),
+      ],
     });
     this.eksDeploymentRole.addToPolicy(
       new iam.PolicyStatement({
@@ -91,7 +98,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     props.dbSecurityGroup.addIngressRule(
       ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
       ec2.Port.tcp(5432),
-      'Allow workloads in VPC to connect to RDS PostgreSQL'
+      'Allow workloads in VPC to connect to RDS PostgreSQL 17.6-R2'
     );
     props.cacheSecurityGroup.addIngressRule(
       ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
@@ -106,11 +113,13 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     this.postgresDatabase = new rds.DatabaseInstance(this, 'ApplicationPostgresDatabase', {
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.VER_16_4 }),
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: postgresEngineVersion,
+      }),
       credentials: rds.Credentials.fromSecret(postgresCredentialsSecret),
       securityGroups: [props.dbSecurityGroup],
       multiAz: true,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
+      instanceType: postgresInstanceType,
       allocatedStorage: 100,
       maxAllocatedStorage: 500,
       storageEncrypted: true,
@@ -127,7 +136,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       subnetIds: props.vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }).subnetIds,
     });
 
-    const memcachedCluster = new elasticache.CfnCacheCluster(this, 'MemcachedCluster', {
+    this.memcachedCluster = new elasticache.CfnCacheCluster(this, 'MemcachedCluster', {
       engine: 'memcached',
       cacheNodeType: 'cache.t3.small',
       numCacheNodes: 2,
@@ -136,7 +145,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
       cacheSubnetGroupName: memcachedSubnetGroup.ref,
       vpcSecurityGroupIds: [props.cacheSecurityGroup.securityGroupId],
     });
-    memcachedCluster.addDependency(memcachedSubnetGroup);
+    this.memcachedCluster.addDependency(memcachedSubnetGroup);
 
     this.applicationDataTable = new dynamodb.Table(this, 'ApplicationDataTable', {
       partitionKey: {
@@ -176,7 +185,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
         namespace: 'AWS/ElastiCache',
         metricName: 'CPUUtilization',
         dimensionsMap: {
-          CacheClusterId: memcachedCluster.ref,
+          CacheClusterId: this.memcachedCluster.ref,
         },
         period: cdk.Duration.minutes(5),
         statistic: 'Average',
@@ -212,8 +221,17 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'PostgresEndpointAddress', {
       value: this.postgresDatabase.dbInstanceEndpointAddress,
     });
+    new cdk.CfnOutput(this, 'PostgresEngineVersion', {
+      value: '17.6-R2',
+    });
+    new cdk.CfnOutput(this, 'PostgresInstanceType', {
+      value: 'db.m5.large',
+    });
     new cdk.CfnOutput(this, 'MemcachedConfigurationEndpoint', {
-      value: `${memcachedCluster.attrConfigurationEndpointAddress}:${memcachedCluster.attrConfigurationEndpointPort}`,
+      value: `${this.memcachedCluster.attrConfigurationEndpointAddress}:${this.memcachedCluster.attrConfigurationEndpointPort}`,
+    });
+    new cdk.CfnOutput(this, 'MemcachedClusterId', {
+      value: this.memcachedCluster.ref,
     });
     new cdk.CfnOutput(this, 'ApplicationDataTableName', {
       value: this.applicationDataTable.tableName,

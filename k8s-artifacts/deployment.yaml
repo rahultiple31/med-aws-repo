@@ -27,7 +27,7 @@ spec:
             - name: PORT
               value: "3000"
             - name: DYNAMODB_TABLE
-              value: ApplicationDataTable
+              value: REPLACE_WITH_DYNAMODB_TABLE
             - name: POSTGRES_HOST
               value: REPLACE_WITH_RDS_ENDPOINT
             - name: POSTGRES_PORT

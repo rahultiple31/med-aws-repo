@@ -13,7 +13,7 @@ This folder contains enterprise-ready AWS CDK stacks for a control plane and app
 
 - `SbtApplicationPlaneStack`
   - Amazon EKS (application deployment target)
-  - Amazon RDS PostgreSQL
+  - Amazon RDS PostgreSQL 17.6-R2 (`db.m5.large`)
   - Amazon ElastiCache Memcached
   - Amazon DynamoDB (application data)
   - Amazon CloudWatch log groups and alarms
