@@ -75,9 +75,6 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     this.eksDeploymentRole = new iam.Role(this, 'EksDeploymentCodeBuildRole', {
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
       description: 'Role used by CodeBuild deploy stage to apply manifests to EKS.',
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSCodeBuildServiceRole'),
-      ],
     });
     this.eksDeploymentRole.addToPolicy(
       new iam.PolicyStatement({

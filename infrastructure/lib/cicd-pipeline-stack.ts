@@ -62,7 +62,15 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
     const eksDeploymentRole = iam.Role.fromRoleArn(
       this,
       'ImportedEksDeploymentCodeBuildRole',
-      props.eksDeployRoleArn
+      props.eksDeployRoleArn,
+      { mutable: true }
+    );
+    artifactBucket.grantReadWrite(eksDeploymentRole);
+    eksDeploymentRole.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'],
+        resources: ['*'],
+      })
     );
 
     const deployProject = new codebuild.PipelineProject(this, 'SbtEksDeployProject', {
