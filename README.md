@@ -205,6 +205,7 @@ flowchart LR
     "Version": "2012-10-17",
     "Statement": [
         {
+            "Sid": "GitHubOidcTrust",
             "Effect": "Allow",
             "Principal": {
                 "Federated": "arn:aws:iam::056732011422:oidc-provider/token.actions.githubusercontent.com"
@@ -216,8 +217,10 @@ flowchart LR
                 },
                 "StringLike": {
                     "token.actions.githubusercontent.com:sub": [
-                        "repo:sbt-cdl/rahultiple31:*",
-                        "repo:sbt-cdl/rahultiple31:*"
+                        "repo:rahultiple31/med-aws-repo:ref:refs/heads/main",
+                        "repo:rahultiple31/med-aws-repo:ref:refs/heads/*",
+                        "repo:rahultiple31/med-aws-repo:pull_request",
+                        "repo:rahultiple31/med-aws-repo:environment:*"
                     ]
                 }
             }
