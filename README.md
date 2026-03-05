@@ -14,7 +14,7 @@ flowchart LR
   subgraph Control Plane
     CP1[VPC + Subnets]
     CP2[Security Groups]
-    CP3[Cognito + Agens Dev ControlPlane]
+    CP3[Cognito + Dev ControlPlane]
     CP4[Tenant DynamoDB]
     CP5[CloudWatch Dashboard/Alarm]
   end
@@ -39,7 +39,7 @@ flowchart LR
 
 
 ## policy
-
+Policy name: sbt-cdk.json
 ```
 {
     "Version": "2012-10-17",
@@ -133,7 +133,7 @@ flowchart LR
             "Action": "iam:PassRole",
             "Resource": [
                 "arn:aws:iam::056732011422:role/cdk-gha659fds-*",
-                "arn:aws:iam::056732011422:role/Sbt*",
+                "arn:aws:iam::056732011422:role/Dev*",
                 "arn:aws:iam::056732011422:role/*CodeBuild*",
                 "arn:aws:iam::056732011422:role/*CodePipeline*",
                 "arn:aws:iam::056732011422:role/*Eks*",
@@ -199,6 +199,7 @@ flowchart LR
 ```
 
 ## trust policy
+Trust policy name: sbt-cdk-trust.json
 
 ```
 {
@@ -230,7 +231,9 @@ flowchart LR
 ```
 
 
-## Create role trust policy: sbt-local-role-trust.json
+## Create role trust policy: dev-local-role-trust.json
+
+Policy document file: dev-local-role-trust.json
 
 ```
 {
@@ -250,16 +253,19 @@ flowchart LR
 ```
 
 
-## Create Rahul user policy (assume role only): rahul-assume-role-policy.json
+## Create Rahul user policy (assume role only): rahul-assume-dev-local-role-policy.json
+
+Policy name: rahul-assume-dev-local-role-policy.json
+
 ```
 {
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "AssumeSbtLocalDeployRole",
+      "Sid": "AssumeDevLocalDeployRole",
       "Effect": "Allow",
       "Action": "sts:AssumeRole",
-      "Resource": "arn:aws:iam::056732011422:role/SbtLocalDeployRole"
+      "Resource": "arn:aws:iam::056732011422:role/DevLocalDeployRole"
     },
     {
       "Sid": "GetCallerIdentity",

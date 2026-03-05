@@ -23,7 +23,7 @@ export class SbtControlPlaneStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: SbtControlPlaneStackProps) {
     super(scope, id, props);
 
-    this.vpc = new ec2.Vpc(this, 'AgensDevVpc', {
+    this.vpc = new ec2.Vpc(this, 'DevVpc', {
       ipAddresses: ec2.IpAddresses.cidr('10.20.0.0/16'),
       maxAzs: 2,
       natGateways: 1,
@@ -76,17 +76,17 @@ export class SbtControlPlaneStack extends cdk.Stack {
     );
 
     const controlPlaneAuditLogGroup = new logs.LogGroup(this, 'ControlPlaneAuditLogGroup', {
-      logGroupName: '/agens-dev/control-plane/audit',
+      logGroupName: '/dev/control-plane/audit',
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    const cognitoAuth = new CognitoAuth(this, 'AgensDevCognitoAuth', {
+    const cognitoAuth = new CognitoAuth(this, 'DevCognitoAuth', {
       controlPlaneCallbackURL: props.controlPlaneCallbackUrl ?? 'https://localhost',
       setAPIGWScopes: true,
     });
 
-    const controlPlane = new ControlPlane(this, 'AgensDevControlPlane', {
+    const controlPlane = new ControlPlane(this, 'DevControlPlane', {
       systemAdminEmail: props.systemAdminEmail,
       auth: cognitoAuth,
     });
@@ -133,7 +133,7 @@ export class SbtControlPlaneStack extends cdk.Stack {
     });
 
     const dashboard = new cloudwatch.Dashboard(this, 'ControlPlaneDashboard', {
-      dashboardName: 'agens-dev-control-plane',
+      dashboardName: 'dev-control-plane',
     });
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({

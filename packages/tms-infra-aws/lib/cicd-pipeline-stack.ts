@@ -38,7 +38,7 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
       encryption: ecr.RepositoryEncryption.AES_256,
     });
 
-    const buildProject = new codebuild.PipelineProject(this, 'AgensDevCodeBuildProject', {
+    const buildProject = new codebuild.PipelineProject(this, 'DevCodeBuildProject', {
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
         privileged: true,
@@ -73,7 +73,7 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
       })
     );
 
-    const deployProject = new codebuild.PipelineProject(this, 'AgensDevEksDeployProject', {
+    const deployProject = new codebuild.PipelineProject(this, 'DevEksDeployProject', {
       role: eksDeploymentRole,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
@@ -88,7 +88,7 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
     const sourceOutput = new codepipeline.Artifact('SourceArtifact');
     const buildOutput = new codepipeline.Artifact('BuildArtifact');
 
-    const pipeline = new codepipeline.Pipeline(this, 'AgensDevEnterpriseCodePipeline', {
+    const pipeline = new codepipeline.Pipeline(this, 'DevEnterpriseCodePipeline', {
       pipelineType: codepipeline.PipelineType.V2,
       crossAccountKeys: false,
       artifactBucket,

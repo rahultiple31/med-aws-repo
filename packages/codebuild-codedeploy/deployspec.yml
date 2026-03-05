@@ -22,4 +22,4 @@ phases:
   post_build:
     commands:
       - echo "Waiting for deployment rollout"
-      - kubectl rollout status deployment/cdk-web -n agens-dev-app --timeout=300s
+      - kubectl rollout status deployment/cdk-web -n dev-app --timeout=300s

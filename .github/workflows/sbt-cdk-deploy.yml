@@ -1,4 +1,4 @@
-name: Deploy Agens Dev Infrastructure
+name: Deploy Dev Infrastructure
 
 on:
   workflow_dispatch:
@@ -100,13 +100,13 @@ jobs:
 
           case "$stack_choice" in
             control-plane-stack.ts)
-              resolved_stack="AgensDevControlPlaneStack"
+              resolved_stack="DevControlPlaneStack"
               ;;
             application-plane-stack.ts)
-              resolved_stack="AgensDevApplicationPlaneStack"
+              resolved_stack="DevApplicationPlaneStack"
               ;;
             cicd-pipeline-stack.ts)
-              resolved_stack="AgensDevCiCdPipelineStack"
+              resolved_stack="DevCiCdPipelineStack"
               ;;
             all-stacks)
               resolved_stack="--all"

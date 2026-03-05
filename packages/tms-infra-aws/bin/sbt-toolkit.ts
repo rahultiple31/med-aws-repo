@@ -21,17 +21,17 @@ if (!systemAdminEmail) {
 const githubOwner = app.node.tryGetContext('githubOwner') ?? 'rahultiple31';
 const githubRepo = app.node.tryGetContext('githubRepo') ?? 'cdk-web';
 const githubBranch = app.node.tryGetContext('githubBranch') ?? 'main';
-const eksClusterName = app.node.tryGetContext('eksClusterName') ?? 'agens-dev-application-eks';
+const eksClusterName = app.node.tryGetContext('eksClusterName') ?? 'dev-application-eks';
 const sourceArtifactObjectKey = app.node.tryGetContext('sourceArtifactObjectKey') ?? 'source.zip';
 
-const controlPlaneStack = new SbtControlPlaneStack(app, 'AgensDevControlPlaneStack', {
+const controlPlaneStack = new SbtControlPlaneStack(app, 'DevControlPlaneStack', {
   env,
   systemAdminEmail,
   controlPlaneCallbackUrl:
     app.node.tryGetContext('controlPlaneCallbackUrl') ?? 'https://admin.example.com/callback',
 });
 
-const applicationPlaneStack = new SbtApplicationPlaneStack(app, 'AgensDevApplicationPlaneStack', {
+const applicationPlaneStack = new SbtApplicationPlaneStack(app, 'DevApplicationPlaneStack', {
   env,
   vpc: controlPlaneStack.vpc,
   appSecurityGroup: controlPlaneStack.appSecurityGroup,
@@ -41,7 +41,7 @@ const applicationPlaneStack = new SbtApplicationPlaneStack(app, 'AgensDevApplica
 });
 applicationPlaneStack.addDependency(controlPlaneStack);
 
-const cicdPipelineStack = new SbtCiCdPipelineStack(app, 'AgensDevCiCdPipelineStack', {
+const cicdPipelineStack = new SbtCiCdPipelineStack(app, 'DevCiCdPipelineStack', {
   env,
   eksClusterName: applicationPlaneStack.cluster.clusterName,
   eksDeployRoleArn: applicationPlaneStack.eksDeploymentRole.roleArn,

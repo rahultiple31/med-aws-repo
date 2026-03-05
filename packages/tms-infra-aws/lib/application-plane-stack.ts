@@ -46,7 +46,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     );
 
     this.cluster = new eks.Cluster(this, 'ApplicationPlaneEksCluster', {
-      clusterName: props.eksClusterName ?? 'agens-dev-application-eks',
+      clusterName: props.eksClusterName ?? 'dev-application-eks',
       version: eks.KubernetesVersion.V1_34,
       vpc: props.vpc,
       vpcSubnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
@@ -84,11 +84,11 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     );
     this.cluster.awsAuth.addMastersRole(this.eksDeploymentRole);
 
-    this.cluster.addManifest('AgensDevAppNamespace', {
+    this.cluster.addManifest('DevAppNamespace', {
       apiVersion: 'v1',
       kind: 'Namespace',
       metadata: {
-        name: 'agens-dev-app',
+        name: 'dev-app',
       },
     });
 
@@ -104,7 +104,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     );
 
     const postgresCredentialsSecret = new rds.DatabaseSecret(this, 'PostgresCredentials', {
-      username: 'agens_dev_admin',
+      username: 'dev_admin',
     });
 
     this.postgresDatabase = new rds.DatabaseInstance(this, 'ApplicationPostgresDatabase', {
@@ -162,7 +162,7 @@ export class SbtApplicationPlaneStack extends cdk.Stack {
     });
 
     const applicationLogGroup = new logs.LogGroup(this, 'ApplicationPlaneLogGroup', {
-      logGroupName: '/agens-dev/application-plane/platform',
+      logGroupName: '/dev/application-plane/platform',
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });

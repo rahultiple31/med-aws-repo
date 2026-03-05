@@ -1,4 +1,4 @@
-name: Destroy Agens Dev Infrastructure
+name: Destroy Dev Infrastructure
 
 on:
   workflow_dispatch:
@@ -94,7 +94,7 @@ jobs:
 
           disable_rds_deletion_protection_if_needed() {
             local stack_name="$1"
-            if [ "$stack_name" != "AgensDevApplicationPlaneStack" ]; then
+            if [ "$stack_name" != "DevApplicationPlaneStack" ]; then
               return 0
             fi
 
@@ -155,18 +155,18 @@ jobs:
 
           case "$STACK_CHOICE" in
             control-plane-stack.ts)
-              destroy_stack "AgensDevControlPlaneStack"
+              destroy_stack "DevControlPlaneStack"
               ;;
             application-plane-stack.ts)
-              destroy_stack "AgensDevApplicationPlaneStack"
+              destroy_stack "DevApplicationPlaneStack"
               ;;
             cicd-pipeline-stack.ts)
-              destroy_stack "AgensDevCiCdPipelineStack"
+              destroy_stack "DevCiCdPipelineStack"
               ;;
             all-stacks)
-              destroy_stack "AgensDevCiCdPipelineStack"
-              destroy_stack "AgensDevApplicationPlaneStack"
-              destroy_stack "AgensDevControlPlaneStack"
+              destroy_stack "DevCiCdPipelineStack"
+              destroy_stack "DevApplicationPlaneStack"
+              destroy_stack "DevControlPlaneStack"
               ;;
             *)
               echo "Unsupported stack choice: $STACK_CHOICE"
