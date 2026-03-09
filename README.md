@@ -1,40 +1,124 @@
+## CI/CD Flow (Compact + Detailed)
+
 ```mermaid
 flowchart LR
-  A[Developer Uploads source.zip to S3] --> B[CodePipeline Source<br/>S3 Source Action]
-  B --> C[CodeBuild Build Stage]
-  C --> D[Build App + Tests]
-  D --> E[Docker Build]
-  E --> F[Push Image to ECR]
-  F --> G[Prepare K8s Artifacts]
+  A[GitHub: push/merge to main] --> B[Webhook]
+  B --> C[CodePipeline Source]
+  C --> D[CodeBuild Build]
+  D --> D1[npm ci + build + test]
+  D1 --> D2[docker build]
+  D2 --> D3[push image to ECR]
+  D3 --> D4[render k8s yaml<br/>RDS/Memcached/DynamoDB]
+  D4 --> E[CodeBuild Deploy]
+  E --> E1[kubectl install + kubeconfig]
+  E1 --> E2[kubectl apply<br/>ns/service/deploy/hpa/ingress]
+  E2 --> E3[rollout status: cdk-web]
+  E3 --> F{Success?}
+  F -->|Yes| G[App live on EKS]
+  F -->|No| H[Fail: check Pipeline/Build logs]
+```
 
-  G --> H[CodeBuild Deploy Stage]
-  H --> I[Connect to EKS Cluster v1.34]
-  I --> J[Apply Namespace/Deployment/Service/HPA/Ingress]
+## Pipeline Source Update (GitHub Webhook)
 
-  subgraph Control Plane
-    CP1[VPC + Subnets]
-    CP2[Security Groups]
-    CP3[Cognito + Dev ControlPlane]
-    CP4[Tenant DynamoDB]
-    CP5[CloudWatch Dashboard/Alarm]
-  end
+This repo now uses a GitHub webhook-triggered source action for CodePipeline.
 
-  subgraph Application Plane
-    AP1[EKS Cluster + NodeGroup]
-    AP2[RDS PostgreSQL 17.6<br/>db.m5.large]
-    AP3[ElastiCache Memcached]
-    AP4[Application DynamoDB]
-    AP5[CloudWatch Logs/Alarms]
-  end
+Trigger behavior:
+- Pipeline starts on push to the configured branch.
+- If PR is merged into `main`, that merge push to `main` triggers the pipeline.
 
-  CP1 --> AP1
-  CP2 --> AP2
-  CP2 --> AP3
-  AP1 --> J
-  J --> AP2
-  J --> AP3
-  J --> AP4
+Step-by-step code changes:
 
+1. Update pipeline props in `packages/tms-infra-aws/lib/cicd-pipeline-stack.ts`.
+```ts
+export interface SbtCiCdPipelineStackProps extends cdk.StackProps {
+  readonly eksClusterName: string;
+  readonly eksDeployRoleArn: string;
+  readonly postgresEndpointAddress: string;
+  readonly memcachedConfigurationEndpoint: string;
+  readonly applicationDataTableName: string;
+  readonly githubOwner: string;
+  readonly githubRepo: string;
+  readonly githubBranch: string;
+  readonly githubOauthTokenSecretName: string;
+}
+```
+
+2. Change source action to GitHub webhook in `packages/tms-infra-aws/lib/cicd-pipeline-stack.ts`.
+```ts
+const sourceOutput = new codepipeline.Artifact('SourceArtifact');
+const buildOutput = new codepipeline.Artifact('BuildArtifact');
+const githubOauthToken = cdk.SecretValue.secretsManager(props.githubOauthTokenSecretName);
+
+const pipeline = new codepipeline.Pipeline(this, 'DevEnterpriseCodePipeline', {
+  pipelineType: codepipeline.PipelineType.V1,
+  crossAccountKeys: false,
+  artifactBucket,
+});
+
+pipeline.addStage({
+  stageName: 'Source',
+  actions: [
+    new actions.GitHubSourceAction({
+      actionName: 'GitHubSource',
+      owner: props.githubOwner,
+      repo: props.githubRepo,
+      branch: props.githubBranch,
+      oauthToken: githubOauthToken,
+      output: sourceOutput,
+      trigger: actions.GitHubTrigger.WEBHOOK,
+    }),
+  ],
+});
+```
+
+3. Update app context wiring in `packages/tms-infra-aws/bin/sbt-toolkit.ts`.
+```ts
+const githubOwner = app.node.tryGetContext('githubOwner') ?? 'rahultiple31';
+const githubRepo = app.node.tryGetContext('githubRepo') ?? 'med-aws-repo';
+const githubBranch = app.node.tryGetContext('githubBranch') ?? 'main';
+const githubOauthTokenSecretName = app.node.tryGetContext('githubOauthTokenSecretName');
+if (!githubOauthTokenSecretName) {
+  throw new Error(
+    'Missing githubOauthTokenSecretName. Pass "-c githubOauthTokenSecretName=<secrets-manager-secret-name>".'
+  );
+}
+
+const cicdPipelineStack = new SbtCiCdPipelineStack(app, 'DevCiCdPipelineStack', {
+  env,
+  eksClusterName: applicationPlaneStack.cluster.clusterName,
+  eksDeployRoleArn: applicationPlaneStack.eksDeploymentRole.roleArn,
+  postgresEndpointAddress: applicationPlaneStack.postgresDatabase.dbInstanceEndpointAddress,
+  memcachedConfigurationEndpoint: `${applicationPlaneStack.memcachedCluster.attrConfigurationEndpointAddress}:${applicationPlaneStack.memcachedCluster.attrConfigurationEndpointPort}`,
+  applicationDataTableName: applicationPlaneStack.applicationDataTable.tableName,
+  githubOwner,
+  githubRepo,
+  githubBranch,
+  githubOauthTokenSecretName,
+});
+```
+
+4. Create GitHub PAT in AWS Secrets Manager.
+- Secret value should be the GitHub Personal Access Token.
+- Minimum scopes: `repo`, `admin:repo_hook`.
+- Example secret name: `github/pat/med-aws-repo`.
+
+5. Deploy stack with required context.
+```powershell
+cd C:\DevOps\med-aws-repo\packages\tms-infra-aws
+npm run cdk -- deploy DevCiCdPipelineStack `
+  -c systemAdminEmail=you@example.com `
+  -c githubOwner=rahultiple31 `
+  -c githubRepo=med-aws-repo `
+  -c githubBranch=main `
+  -c githubOauthTokenSecretName=github/pat/med-aws-repo
+```
+
+6. Verify trigger and execution.
+- Push commit to `main` or merge PR into `main`.
+- CodePipeline should start automatically.
+- You can still trigger manually:
+```powershell
+aws codepipeline start-pipeline-execution --name <CodePipelineName> --region ca-central-1
 ```
 
 

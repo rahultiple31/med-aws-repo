@@ -16,7 +16,7 @@ export interface SbtCiCdPipelineStackProps extends cdk.StackProps {
   readonly githubOwner: string;
   readonly githubRepo: string;
   readonly githubBranch: string;
-  readonly sourceArtifactObjectKey?: string;
+  readonly githubOauthTokenSecretName: string;
 }
 
 export class SbtCiCdPipelineStack extends cdk.Stack {
@@ -30,8 +30,6 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
-    const sourceArtifactObjectKey = props.sourceArtifactObjectKey ?? 'source.zip';
-
     const containerRepository = new ecr.Repository(this, 'ApplicationEcrRepository', {
       repositoryName: `${props.githubRepo}-app`,
       imageScanOnPush: true,
@@ -87,9 +85,10 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
 
     const sourceOutput = new codepipeline.Artifact('SourceArtifact');
     const buildOutput = new codepipeline.Artifact('BuildArtifact');
+    const githubOauthToken = cdk.SecretValue.secretsManager(props.githubOauthTokenSecretName);
 
     const pipeline = new codepipeline.Pipeline(this, 'DevEnterpriseCodePipeline', {
-      pipelineType: codepipeline.PipelineType.V2,
+      pipelineType: codepipeline.PipelineType.V1,
       crossAccountKeys: false,
       artifactBucket,
     });
@@ -97,12 +96,14 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
     pipeline.addStage({
       stageName: 'Source',
       actions: [
-        new actions.S3SourceAction({
-          actionName: 'S3Source',
-          bucket: artifactBucket,
-          bucketKey: sourceArtifactObjectKey,
+        new actions.GitHubSourceAction({
+          actionName: 'GitHubSource',
+          owner: props.githubOwner,
+          repo: props.githubRepo,
+          branch: props.githubBranch,
+          oauthToken: githubOauthToken,
           output: sourceOutput,
-          trigger: actions.S3Trigger.POLL,
+          trigger: actions.GitHubTrigger.WEBHOOK,
         }),
       ],
     });
@@ -144,9 +145,6 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, 'SourceArtifactBucketName', {
       value: artifactBucket.bucketName,
-    });
-    new cdk.CfnOutput(this, 'SourceArtifactObjectKey', {
-      value: sourceArtifactObjectKey,
     });
   }
 }

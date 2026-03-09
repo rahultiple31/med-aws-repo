@@ -19,10 +19,15 @@ if (!systemAdminEmail) {
 }
 
 const githubOwner = app.node.tryGetContext('githubOwner') ?? 'rahultiple31';
-const githubRepo = app.node.tryGetContext('githubRepo') ?? 'cdk-web';
+const githubRepo = app.node.tryGetContext('githubRepo') ?? 'med-aws-repo';
 const githubBranch = app.node.tryGetContext('githubBranch') ?? 'main';
+const githubOauthTokenSecretName = app.node.tryGetContext('githubOauthTokenSecretName');
+if (!githubOauthTokenSecretName) {
+  throw new Error(
+    'Missing githubOauthTokenSecretName. Pass "-c githubOauthTokenSecretName=<secrets-manager-secret-name>".'
+  );
+}
 const eksClusterName = app.node.tryGetContext('eksClusterName') ?? 'dev-application-eks';
-const sourceArtifactObjectKey = app.node.tryGetContext('sourceArtifactObjectKey') ?? 'source.zip';
 
 const controlPlaneStack = new SbtControlPlaneStack(app, 'DevControlPlaneStack', {
   env,
@@ -51,6 +56,6 @@ const cicdPipelineStack = new SbtCiCdPipelineStack(app, 'DevCiCdPipelineStack', 
   githubOwner,
   githubRepo,
   githubBranch,
-  sourceArtifactObjectKey,
+  githubOauthTokenSecretName,
 });
 cicdPipelineStack.addDependency(applicationPlaneStack);
