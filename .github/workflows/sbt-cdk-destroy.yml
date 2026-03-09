@@ -89,6 +89,7 @@ jobs:
           STACK_CHOICE: ${{ github.event.inputs.stack }}
           SBT_SYSTEM_ADMIN_EMAIL: ${{ secrets.SBT_SYSTEM_ADMIN_EMAIL }}
           CONTROL_PLANE_CALLBACK_URL: ${{ secrets.CONTROL_PLANE_CALLBACK_URL }}
+          GITHUB_OAUTH_TOKEN_SECRET_NAME: ${{ secrets.GITHUB_OAUTH_TOKEN_SECRET_NAME }}
         run: |
           set -euo pipefail
 
@@ -149,7 +150,8 @@ jobs:
               -c controlPlaneCallbackUrl="$CONTROL_PLANE_CALLBACK_URL" \
               -c githubOwner="rahultiple31" \
               -c githubRepo="med-aws-repo" \
-              -c githubBranch="main"
+              -c githubBranch="main" \
+              -c githubOauthTokenSecretName="${GITHUB_OAUTH_TOKEN_SECRET_NAME:-github/pat/med-aws-repo}"
 
           }
 

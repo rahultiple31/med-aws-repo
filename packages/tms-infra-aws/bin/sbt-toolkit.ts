@@ -21,12 +21,10 @@ if (!systemAdminEmail) {
 const githubOwner = app.node.tryGetContext('githubOwner') ?? 'rahultiple31';
 const githubRepo = app.node.tryGetContext('githubRepo') ?? 'med-aws-repo';
 const githubBranch = app.node.tryGetContext('githubBranch') ?? 'main';
-const githubOauthTokenSecretName = app.node.tryGetContext('githubOauthTokenSecretName');
-if (!githubOauthTokenSecretName) {
-  throw new Error(
-    'Missing githubOauthTokenSecretName. Pass "-c githubOauthTokenSecretName=<secrets-manager-secret-name>".'
-  );
-}
+const githubOauthTokenSecretName =
+  app.node.tryGetContext('githubOauthTokenSecretName') ??
+  process.env.GITHUB_OAUTH_TOKEN_SECRET_NAME ??
+  `github/pat/${githubRepo}`;
 const eksClusterName = app.node.tryGetContext('eksClusterName') ?? 'dev-application-eks';
 
 const controlPlaneStack = new SbtControlPlaneStack(app, 'DevControlPlaneStack', {
