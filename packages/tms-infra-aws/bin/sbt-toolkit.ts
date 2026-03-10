@@ -23,7 +23,7 @@ const githubRepo = app.node.tryGetContext('githubRepo') ?? 'med-aws-repo';
 const githubBranch = app.node.tryGetContext('githubBranch') ?? 'main';
 const githubOauthTokenSecretName =
   app.node.tryGetContext('githubOauthTokenSecretName') ??
-  process.env.GITHUB_OAUTH_TOKEN_SECRET_NAME ??
+  process.env.OAUTH_TOKEN_SECRET_NAME ??
   `github/pat/${githubRepo}`;
 const eksClusterName = app.node.tryGetContext('eksClusterName') ?? 'dev-application-eks';
 
