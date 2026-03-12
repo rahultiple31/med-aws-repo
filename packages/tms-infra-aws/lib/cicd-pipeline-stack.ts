@@ -85,7 +85,12 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
 
     const sourceOutput = new codepipeline.Artifact('SourceArtifact');
     const buildOutput = new codepipeline.Artifact('BuildArtifact');
-    const githubOauthToken = cdk.SecretValue.secretsManager(props.githubOauthTokenSecretName);
+    const githubOauthToken = cdk.SecretValue.secretsManager(
+      props.githubOauthTokenSecretName,
+      {
+        jsonField: 'github/pat/med-aws-repo',
+      }
+    );
 
     const pipeline = new codepipeline.Pipeline(this, 'DevEnterpriseCodePipeline', {
       pipelineType: codepipeline.PipelineType.V1,
