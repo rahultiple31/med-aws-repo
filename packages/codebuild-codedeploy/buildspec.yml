@@ -11,15 +11,15 @@ phases:
   pre_build:
     commands:
       - echo "Installing dependencies and running build checks from pipeline source artifact"
-      - npm ci
-      - npm run build --if-present
-      - npm run test --if-present
+      - npm --prefix application ci
+      - npm --prefix application run build --if-present
+      - npm --prefix application run test --if-present
       - export ECR_REGISTRY="$(echo "$ECR_REPOSITORY_URI" | cut -d/ -f1)"
       - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
   build:
     commands:
       - echo "Building docker image"
-      - docker build -t "$ECR_REPOSITORY_URI:$IMAGE_TAG" .
+      - docker build -t "$ECR_REPOSITORY_URI:$IMAGE_TAG" -f application/Dockerfile application
   post_build:
     commands:
       - echo "Pushing docker image to ECR"

@@ -1,0 +1,17 @@
+{
+  "name": "cdk-web-test-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal Node.js test application for the CI/CD pipeline.",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "main": "dist/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "build": "node scripts/build.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
