@@ -88,7 +88,7 @@ export class SbtCiCdPipelineStack extends cdk.Stack {
     const githubOauthToken = cdk.SecretValue.secretsManager(
       props.githubOauthTokenSecretName,
       {
-        jsonField: 'github/pat/med-aws-repo',
+        jsonField: 'token',
       }
     );
 
